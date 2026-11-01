@@ -25,7 +25,7 @@ services:
       - key: HOTEL_CONTACT_EMAIL
         sync: false
       - key: FRONTEND_BASE_URL
-        value: https://amanecer-five.vercel.app
+        value: https://amanecer-git-codex-amanecer-staging-rubens-projects-f89b03aa.vercel.app
       - key: ADMIN_USERNAME
         sync: false
       - key: ADMIN_PASSWORD
