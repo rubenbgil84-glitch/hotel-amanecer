@@ -41,6 +41,7 @@ export class AdministracionHabitaciones {
     const roomCount = this.standardRooms().length;
     return selectedCount > 0 && selectedCount < roomCount;
   });
+
   private imageDataUrls: string[] = [];
 
   roomImageUrls(room: AdminRoom): string[] {
