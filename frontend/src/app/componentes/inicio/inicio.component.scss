@@ -2,6 +2,35 @@
   display: block;
 }
 
+.home-closure-alert {
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr);
+  align-items: center;
+  gap: .75rem 2rem;
+  padding: 1.1rem max(1.5rem, calc((100% - 1120px) / 2));
+  border-bottom: 1px solid #d6bd82;
+  background: #fbf6e8;
+  color: #59451a;
+}
+
+.home-closure-heading .eyebrow {
+  margin-bottom: .15rem;
+}
+
+.home-closure-alert h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.home-closure-alert ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem 1.5rem;
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: .9rem;
+}
+
 .hero {
   overflow: visible;
   margin-bottom: 3.5rem;
@@ -37,6 +66,12 @@
 }
 
 @media (max-width: 760px) {
+  .home-closure-alert {
+    grid-template-columns: 1fr;
+    gap: .5rem;
+    padding-inline: 1.25rem;
+  }
+
   .hero {
     margin-bottom: 2.5rem;
   }

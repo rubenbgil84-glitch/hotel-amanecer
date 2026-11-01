@@ -465,6 +465,10 @@ export class ApiService {
     });
   }
 
+  upcomingClosures() {
+    return this.http.get<SiteClosure[]>('/api/closures/upcoming');
+  }
+
   createClosure(input: SiteClosureInput) {
     return this.http.post<SiteClosure>('/api/admin/closures', input);
   }

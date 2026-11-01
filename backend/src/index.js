@@ -1530,6 +1530,22 @@ app.get("/api/admin/closures", requireAdmin, async (req, res, next) => {
   }
 });
 
+app.get("/api/closures/upcoming", async (req, res, next) => {
+  try {
+    const {rows} = await pool.query(
+      `SELECT id, start_date, end_date, reason
+         FROM site_closures
+        WHERE start_date >= CURRENT_DATE
+          AND end_date >= CURRENT_DATE
+        ORDER BY start_date`,
+    );
+    res.set("Cache-Control", "public, max-age=60");
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/admin/closures", requireAdmin, async (req, res, next) => {
   const {start_date, end_date, reason = ""} = req.body ?? {};
   const errors = [];

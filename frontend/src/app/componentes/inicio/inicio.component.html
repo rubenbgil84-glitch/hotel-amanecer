@@ -1,3 +1,21 @@
+
+@if (upcomingClosures().length) {
+  <section class="home-closure-alert" aria-labelledby="home-closure-alert-title">
+    <div class="home-closure-heading">
+      <p class="eyebrow">Aviso de calendario</p>
+      <h2 id="home-closure-alert-title">Próximos cierres del hotel</h2>
+    </div>
+    <ul>
+      @for (closure of upcomingClosures(); track closure.id) {
+        <li>
+          <strong>{{ closure.start_date | date: 'dd/MM/yyyy' : 'UTC' }} – {{ closure.end_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong>
+          @if (closure.reason) { <span> · {{ closure.reason }}</span> }
+        </li>
+      }
+    </ul>
+  </section>
+}
+
 <section class="hero" aria-labelledby="hero-title">
   <img
     class="hero-image"
