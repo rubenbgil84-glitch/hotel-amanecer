@@ -58,7 +58,8 @@ for (const area of ["web", "habitaciones"]) {
     const relativePath = relative(base, localPath).split(sep).join("/");
     const objectPath = area === "web" ? `site/${relativePath}` : `rooms/${relativePath}`;
     await upload(publicBucket, objectPath, localPath);
-    publicObjects.set(`${area}/${relativePath}`, `${process.env.SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${publicBucket}/${objectPath.split("/").map(encodeURIComponent).join("/")}`);
+    const objectArea = area === "web" ? "web" : "rooms";
+    publicObjects.set(`${objectArea}/${relativePath}`, `${process.env.SUPABASE_URL.replace(/\/$/, "")}/storage/v1/object/public/${publicBucket}/${objectPath.split("/").map(encodeURIComponent).join("/")}`);
   }
 }
 
@@ -97,6 +98,11 @@ try {
        ON CONFLICT (setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = now()`,
       [settingKey, imageUrl],
     );
+  }
+
+  const ruralHouseImage = publicObjects.get("web/casa-rural.webp");
+  if (ruralHouseImage) {
+    await client.query("UPDATE rooms SET image_url = $1 WHERE slug = 'casa-rural'", [ruralHouseImage]);
   }
 
   const {rows: rooms} = await client.query("SELECT id, slug FROM rooms ORDER BY id");
