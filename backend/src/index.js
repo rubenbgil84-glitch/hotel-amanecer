@@ -553,42 +553,107 @@ async function sendContactEmails({name, email, phone, subject, message}) {
     subject: escapeHtml(subject),
     message: escapeHtml(message).replace(/\r?\n/g, "<br />"),
   };
-  const text = [
-    `Nuevo mensaje de contacto: ${name}`,
+  const hotelText = [
+    `Nuevo mensaje desde el formulario de contacto`,
+    ``,
+    `Nombre: ${name}`,
     `Correo: ${email}`,
     `Teléfono: ${phone || "No indicado"}`,
     `Asunto: ${subject}`,
     "",
+    "Mensaje:",
     message,
+    "",
+    "Puedes responder directamente a este correo para contestar al remitente.",
   ].join("\n");
+  const customerText = [
+    `Hola ${name},`,
+    "",
+    `Hemos recibido correctamente tu mensaje para ${site.site_name}. Te responderemos lo antes posible.`,
+    "",
+    `Asunto: ${subject}`,
+    "",
+    "Tu mensaje:",
+    message,
+    "",
+    `Gracias por contactar con ${site.site_name}.`,
+  ].join("\n");
+  const emailShell = (preheader, content, footer) => `<div style="margin:0;padding:28px 12px;background:#f7f5ef;font-family:Arial,Helvetica,sans-serif;color:#292b27;line-height:1.6">
+    <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden">${preheader}</span>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;margin:0 auto;border:1px solid #e6e2d9;background:#ffffff">
+      <tr>
+        <td style="padding:24px 30px;background:#1d332b;color:#ffffff">
+          <p style="margin:0;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#e0cba5">${siteName}</p>
+        </td>
+      </tr>
+      <tr><td style="padding:30px">${content}</td></tr>
+      <tr>
+        <td style="padding:18px 30px;border-top:1px solid #e6e2d9;color:#74766f;font-size:12px">
+          ${siteName} · ${footer}
+        </td>
+      </tr>
+    </table>
+  </div>`;
+  const hotelHtml = emailShell(
+    `Nuevo mensaje de contacto: ${safe.subject}`,
+    `<h1 style="margin:0 0 8px;color:#1d332b;font-size:24px;line-height:1.25">Nuevo mensaje de contacto</h1>
+    <p style="margin:0 0 22px;color:#74766f">Has recibido una consulta desde el formulario de la web.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
+      <tr>
+        <td width="120" style="padding:11px 12px;border-bottom:1px solid #e6e2d9;color:#74766f;vertical-align:top">Nombre</td>
+        <td style="padding:11px 12px;border-bottom:1px solid #e6e2d9;color:#292b27;font-weight:bold">${safe.name}</td>
+      </tr>
+      <tr>
+        <td width="120" style="padding:11px 12px;border-bottom:1px solid #e6e2d9;color:#74766f;vertical-align:top">Correo</td>
+        <td style="padding:11px 12px;border-bottom:1px solid #e6e2d9"><a href="mailto:${safe.email}" style="color:#28443a">${safe.email}</a></td>
+      </tr>
+      <tr>
+        <td width="120" style="padding:11px 12px;border-bottom:1px solid #e6e2d9;color:#74766f;vertical-align:top">Teléfono</td>
+        <td style="padding:11px 12px;border-bottom:1px solid #e6e2d9;color:#292b27">${safe.phone}</td>
+      </tr>
+      <tr>
+        <td width="120" style="padding:11px 12px;color:#74766f;vertical-align:top">Asunto</td>
+        <td style="padding:11px 12px;color:#292b27;font-weight:bold">${safe.subject}</td>
+      </tr>
+    </table>
+    <div style="margin-top:22px;padding:18px 20px;background:#f7f5ef">
+      <p style="margin:0 0 8px;color:#28443a;font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase">Mensaje</p>
+      <div style="color:#292b27;font-size:14px;overflow-wrap:anywhere">${safe.message}</div>
+    </div>`,
+    "Notificación automática del formulario de contacto.",
+  );
+  const customerHtml = emailShell(
+    `Hemos recibido tu mensaje para ${siteName}`,
+    `<h1 style="margin:0 0 12px;color:#1d332b;font-size:26px;line-height:1.25">¡Gracias por escribirnos!</h1>
+    <p style="margin:0 0 20px;color:#292b27">Hola ${safe.name}, hemos recibido correctamente tu mensaje. Te responderemos lo antes posible.</p>
+    <div style="margin-bottom:16px;padding:14px 18px;border-left:3px solid #b87958;background:#f7f5ef">
+      <p style="margin:0 0 4px;color:#74766f;font-size:12px;letter-spacing:1px;text-transform:uppercase">Asunto</p>
+      <p style="margin:0;color:#292b27;font-weight:bold">${safe.subject}</p>
+    </div>
+    <div style="padding:18px 20px;border:1px solid #e6e2d9">
+      <p style="margin:0 0 8px;color:#28443a;font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase">Tu mensaje</p>
+      <div style="color:#292b27;font-size:14px;overflow-wrap:anywhere">${safe.message}</div>
+    </div>
+    <p style="margin:20px 0 0;color:#74766f;font-size:14px">Si necesitas añadir algo, puedes responder a este correo.</p>`,
+    "Gracias por ponerte en contacto con nosotros.",
+  );
 
   await mailer.sendMail({
     from: EMAIL_USER,
     to: site.site_email || EMAIL_USER,
     replyTo: email,
     subject: `Contacto web · ${subject}`,
-    text,
-    html: `<div style="font-family:Arial,sans-serif;color:#242820;line-height:1.6">
-      <h2>Nuevo mensaje de contacto</h2>
-      <p><strong>Nombre:</strong> ${safe.name}</p>
-      <p><strong>Correo:</strong> <a href="mailto:${safe.email}">${safe.email}</a></p>
-      <p><strong>Teléfono:</strong> ${safe.phone}</p>
-      <p><strong>Asunto:</strong> ${safe.subject}</p>
-      <p>${safe.message}</p>
-    </div>`,
+    text: hotelText,
+    html: hotelHtml,
   });
 
   await mailer.sendMail({
     from: EMAIL_USER,
     to: email,
+    replyTo: site.site_email || EMAIL_USER,
     subject: `Hemos recibido tu mensaje · ${site.site_name}`,
-    text: `Hola ${name},\n\nHemos recibido tu solicitud${subject ? ` sobre "${subject}"` : ""}. En la mayor brevedad posible nos pondremos en contacto contigo.\n\nGracias por escribirnos.\n${site.site_name}`,
-    html: `<div style="font-family:Arial,sans-serif;color:#242820;line-height:1.6">
-      <p>Hola ${safe.name},</p>
-      <p>Hemos recibido tu solicitud sobre <strong>${safe.subject}</strong>. En la mayor brevedad posible nos pondremos en contacto contigo.</p>
-      <p>Gracias por escribirnos.</p>
-      <p><strong>${siteName}</strong></p>
-    </div>`,
+    text: customerText,
+    html: customerHtml,
   });
 }
 
