@@ -4264,11 +4264,14 @@ app.post(
         `SELECT c.id, c.code, c.discount_percent::float8 AS discount_percent,
                 c.minimum_amount::float8 AS minimum_amount,
                 c.starts_on::text AS starts_on, c.ends_on::text AS ends_on,
+                to_char(c.starts_on, 'DD/MM/YYYY') AS starts_on_display,
+                to_char(c.ends_on, 'DD/MM/YYYY') AS ends_on_display,
                 c.max_uses, c.is_active,
                 (SELECT COUNT(*)::int FROM booking_discount_redemptions r
                   WHERE r.discount_code_id = c.id) AS usage_count,
                 COALESCE((SELECT json_agg(json_build_object(
-                  'start_date', d.start_date, 'end_date', d.end_date
+                  'start_date', to_char(d.start_date, 'DD/MM/YYYY'),
+                  'end_date', to_char(d.end_date, 'DD/MM/YYYY')
                 ) ORDER BY d.start_date)
                   FROM discount_code_excluded_dates d
                  WHERE d.discount_code_id = c.id), '[]'::json) AS excluded_dates
@@ -4317,20 +4320,16 @@ app.post(
       };
       const validity = [
         promotion.starts_on
-          ? `Válido desde el ${formatDateForMessage(toDateOnly(promotion.starts_on))}`
+          ? `Válido desde el ${promotion.starts_on_display}`
           : "",
         promotion.ends_on
-          ? `hasta el ${formatDateForMessage(toDateOnly(promotion.ends_on))}`
+          ? `hasta el ${promotion.ends_on_display}`
           : "",
       ]
         .filter(Boolean)
         .join(" ");
       const excludedDates = promotion.excluded_dates.map(
-        ({start_date, end_date}) => {
-          const start = formatDateForMessage(toDateOnly(start_date));
-          const end = formatDateForMessage(toDateOnly(end_date));
-          return `${start} – ${end}`;
-        },
+        ({start_date, end_date}) => `${start_date} – ${end_date}`,
       );
       const sent = [];
       const failed = [];
