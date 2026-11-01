@@ -92,7 +92,8 @@
   gap: 1.25rem;
 
   label { display: grid; align-content: start; gap: .45rem; color: var(--ink); font-size: .88rem; font-weight: 600; }
-  label > span { color: var(--clay); }
+  .field-label { color: var(--ink); }
+  .required-mark { color: var(--clay); }
   input, textarea {
     width: 100%;
     min-height: 3rem;

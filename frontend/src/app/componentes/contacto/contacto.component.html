@@ -92,32 +92,32 @@
       <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <div class="field-grid">
           <label>
-            Nombre <span aria-hidden="true">*</span>
+            <span class="field-label">Nombre <span class="required-mark" aria-hidden="true">*</span></span>
             <input type="text" formControlName="name" autocomplete="name" maxlength="100" />
             @if (form.controls.name.touched && form.controls.name.invalid) {
               <small>Escribe tu nombre (mínimo 2 caracteres).</small>
             }
           </label>
           <label>
-            Correo electrónico <span aria-hidden="true">*</span>
+            <span class="field-label">Correo electrónico <span class="required-mark" aria-hidden="true">*</span></span>
             <input type="email" formControlName="email" autocomplete="email" maxlength="254" />
             @if (form.controls.email.touched && form.controls.email.invalid) {
               <small>Escribe un correo electrónico válido.</small>
             }
           </label>
           <label>
-            Teléfono
+            <span class="field-label">Teléfono</span>
             <input type="tel" formControlName="phone" autocomplete="tel" maxlength="40" />
           </label>
           <label>
-            Asunto <span aria-hidden="true">*</span>
+            <span class="field-label">Asunto <span class="required-mark" aria-hidden="true">*</span></span>
             <input type="text" formControlName="subject" maxlength="120" />
             @if (form.controls.subject.touched && form.controls.subject.invalid) {
               <small>Escribe un asunto de al menos 3 caracteres.</small>
             }
           </label>
           <label class="field-wide">
-            Mensaje <span aria-hidden="true">*</span>
+            <span class="field-label">Mensaje <span class="required-mark" aria-hidden="true">*</span></span>
             <textarea formControlName="message" rows="6" maxlength="5000"></textarea>
             @if (form.controls.message.touched && form.controls.message.invalid) {
               <small>El mensaje debe tener al menos 10 caracteres.</small>
