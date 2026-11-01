@@ -54,20 +54,27 @@
 .room-card { overflow:hidden; border:1px solid #dfe2d9; background:#f7f8f5; box-shadow:0 5px 18px #1e352208; }
 .room-image { display:block; width:100%; height:13rem; background:#eceee8; object-fit:cover; }
 .room-card-body { padding:1.1rem; }
-.room-select { display:flex; align-items:center; gap:.45rem; margin-bottom:.75rem; }
 .room-title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
 .room-title-row h2 { margin:0; font-size:1.45rem; }
 .room-description { margin-block:.8rem; color:var(--muted); font-size:.86rem; line-height:1.5; }
 .room-meta { margin-bottom:.75rem; font-weight:700; }
 .card-actions { justify-content:flex-start; }
 .card-actions button { min-height:2.3rem; padding:.45rem .65rem; font-size:.75rem; }
-.bulk-options { position:sticky; top:1rem; padding:1rem; border:1px solid var(--line); background:#fff; }
-.bulk-heading label { display:flex; gap:.4rem; margin-top:.75rem; }
-.bulk-price-form, .bulk-actions { display:grid; gap:.65rem; margin-top:1rem; }
-.bulk-price-form h3, .bulk-actions h3 { margin:0; }
-.bulk-price-form label { display:grid; gap:.3rem; }
+.bulk-options { position:sticky; top:1rem; padding:1rem; border:1px solid var(--line); background:#fff; box-shadow:0 8px 24px #1e35220a; }
+.bulk-heading { display:grid; gap:.65rem; }
+.bulk-heading h2 { margin:0; font-size:1.55rem; }
+.bulk-heading .eyebrow { margin-bottom:.4rem; }
+.bulk-select-all { display:flex; align-items:center; gap:.6rem; width:100%; min-height:2.7rem; margin:0; padding:.6rem .7rem; border:1px solid #e1e4dc; background:#f7f8f5; cursor:pointer; }
+.admin-page input[type=checkbox] { width:1.1rem; height:1.1rem; min-height:1.1rem; flex:0 0 auto; margin:0; padding:0; accent-color:var(--forest); cursor:pointer; }
+.room-select { display:flex; align-items:center; gap:.5rem; width:max-content; min-height:1.8rem; margin-bottom:.75rem; cursor:pointer; }
+.bulk-selection-status { display:flex; align-items:center; justify-content:space-between; gap:.5rem; color:var(--muted); font-size:.78rem; }
+.bulk-empty-selection, .bulk-section-note { margin:0; color:var(--muted); font-size:.78rem; line-height:1.45; }
+.bulk-price-form, .bulk-actions { display:grid; gap:.65rem; margin-top:1rem; padding-top:1rem; border-top:1px solid var(--line); }
+.bulk-price-form h3, .bulk-actions h3 { margin:0; font-size:1.15rem; line-height:1.2; }
+.bulk-price-form label { display:grid; gap:.3rem; font-size:.78rem; }
 .bulk-price-form input { width:100%; min-height:2.4rem; padding:.5rem; border:1px solid #d5d9cf; font:inherit; }
 .bulk-price-form button, .bulk-actions button { width:100%; }
+.bulk-options button:disabled { cursor:not-allowed; opacity:.55; }
 .bulk-actions small { color:var(--muted); font-size:.72rem; }
 @media (max-width: 650px) {
   .admin-header-inner, .page-heading { align-items: flex-start; flex-direction: column; padding-block: 1rem; }

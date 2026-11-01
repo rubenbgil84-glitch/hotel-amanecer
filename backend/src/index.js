@@ -4976,7 +4976,9 @@ app.post("/api/admin/rooms/bulk", requireAdmin, async (req, res, next) => {
       }
       const {rowCount} = await pool.query(
         `UPDATE rooms
-            SET single_price = $2, double_price = $3, extra_bed_price = $4,
+            SET single_price = CASE WHEN pricing_type = 'standard' THEN $2 ELSE single_price END,
+                double_price = CASE WHEN pricing_type = 'standard' THEN $3 ELSE double_price END,
+                extra_bed_price = CASE WHEN pricing_type = 'standard' THEN $4 ELSE extra_bed_price END,
                 price_per_night = CASE WHEN pricing_type = 'rural_house' THEN $5 ELSE $3 END
           WHERE id = ANY($1::int[])`,
         [ids, single_price, double_price, extra_bed_price, rural_house_price],

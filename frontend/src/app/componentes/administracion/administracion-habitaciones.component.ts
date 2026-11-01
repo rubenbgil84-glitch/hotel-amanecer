@@ -28,6 +28,15 @@ export class AdministracionHabitaciones {
   readonly editingBlockId = signal<number | null>(null);
   readonly selectedRoomIds = signal<number[]>([]);
   readonly selectedRoomCount = computed(() => this.selectedRoomIds().length);
+  readonly allRoomsSelected = computed(() => {
+    const roomCount = this.rooms()?.length ?? 0;
+    return roomCount > 0 && this.selectedRoomCount() === roomCount;
+  });
+  readonly someRoomsSelected = computed(() => {
+    const selectedCount = this.selectedRoomCount();
+    const roomCount = this.rooms()?.length ?? 0;
+    return selectedCount > 0 && selectedCount < roomCount;
+  });
   private imageDataUrl: string | null = null;
 
   readonly form = this.fb.group({
@@ -61,17 +70,19 @@ export class AdministracionHabitaciones {
     this.loadRooms();
   }
 
-  loadRooms(): void {
-    this.loading.set(true);
+  loadRooms(showLoading = true): void {
+    if (showLoading) this.loading.set(true);
     this.error.set('');
     this.api.adminRooms().subscribe({
       next: (rooms) => {
         this.rooms.set(rooms);
-        this.loading.set(false);
+        const roomIds = new Set(rooms.map((room) => room.id));
+        this.selectedRoomIds.update((ids) => ids.filter((id) => roomIds.has(id)));
+        if (showLoading) this.loading.set(false);
       },
       error: (error: HttpErrorResponse) => {
         this.showRequestError(error, 'No se pudieron cargar las habitaciones.');
-        this.loading.set(false);
+        if (showLoading) this.loading.set(false);
       },
     });
   }
@@ -216,7 +227,13 @@ export class AdministracionHabitaciones {
       : []);
   }
 
+  clearRoomSelection(): void {
+    this.selectedRoomIds.set([]);
+  }
+
   applyBulkAction(action: 'activate' | 'deactivate' | 'delete' | 'set_prices'): void {
+    if (this.saving()) return;
+    this.clearMessages();
     const ids = this.selectedRoomIds();
     if (!ids.length) {
       this.error.set('Selecciona al menos un alojamiento.');
@@ -230,7 +247,6 @@ export class AdministracionHabitaciones {
       this.error.set('Indica precios válidos para aplicar los cambios.');
       return;
     }
-    this.clearMessages();
     const input = {
       room_ids: ids,
       action,
@@ -256,7 +272,7 @@ export class AdministracionHabitaciones {
             ? `Precios actualizados en ${result.updated ?? 0} alojamientos.`
             : `Estado actualizado en ${result.updated ?? 0} alojamientos.`);
         }
-        this.loadRooms();
+        this.loadRooms(false);
       },
       error: (error: HttpErrorResponse) => {
         this.saving.set(false);
