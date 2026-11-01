@@ -1,0 +1,25 @@
+<div class="gallery">
+  <div class="gallery-viewport" [class.summary-viewport]="variant() === 'summary'" [class.detail-viewport]="variant() === 'detail'">
+    <img class="gallery-main-image" [src]="currentImage()" [alt]="alt()" [loading]="loading()" decoding="async" />
+    @if (images().length > 1) {
+      <button type="button" class="gallery-arrow gallery-previous" [attr.aria-label]="'Foto anterior de ' + alt()" (click)="showPreviousImage()">‹</button>
+      <button type="button" class="gallery-arrow gallery-next" [attr.aria-label]="'Foto siguiente de ' + alt()" (click)="showNextImage()">›</button>
+      <span class="gallery-count" aria-live="polite">{{ activeIndex() % images().length + 1 }} / {{ images().length }}</span>
+    }
+  </div>
+  @if (images().length > 1) {
+    <div class="gallery-thumbnails" role="group" [attr.aria-label]="'Fotos de ' + alt()">
+      @for (image of images(); track image; let i = $index) {
+        <button
+          type="button"
+          class="gallery-thumbnail"
+          [class.active]="i === activeIndex() % images().length"
+          [attr.aria-label]="'Ver foto ' + (i + 1) + ' de ' + images().length"
+          [attr.aria-pressed]="i === activeIndex() % images().length"
+          (click)="selectImage(i)">
+          <img [src]="image" alt="" loading="lazy" decoding="async" />
+        </button>
+      }
+    </div>
+  }
+</div>

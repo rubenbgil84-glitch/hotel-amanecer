@@ -20,6 +20,18 @@ services:
         sync: false
       - key: HOTEL_CONTACT_EMAIL
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLIC_BUCKET
+        sync: false
+      - key: SUPABASE_S3_ENDPOINT
+        sync: false
+      - key: SUPABASE_S3_REGION
+        sync: false
+      - key: SUPABASE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: SUPABASE_S3_SECRET_ACCESS_KEY
+        sync: false
       - key: FRONTEND_BASE_URL
         value: https://amanecer-five.vercel.app
       - key: ADMIN_USERNAME

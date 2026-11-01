@@ -1,0 +1,167 @@
+<div class="admin-page">
+  <header class="admin-header">
+    <div class="wrap admin-header-inner">
+      <a class="admin-brand" routerLink="/carmen-admin/dashboard">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Hotel Amanecer <small>Administración</small></span>
+      </a>
+      <a class="back-link" routerLink="/carmen-admin/dashboard">Volver al panel</a>
+    </div>
+  </header>
+
+  <main class="wrap gallery-admin-content">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">Contenido público</p>
+        <h1>Galería de fotos</h1>
+        <p>Crea álbumes, sube fotos y revisa las aportaciones antes de publicarlas.</p>
+      </div>
+    </div>
+    @if (error()) { <p class="admin-error" role="alert">{{ error() }}</p> }
+    @if (notice()) { <p class="admin-notice" role="status">{{ notice() }}</p> }
+
+    <section class="create-album panel" aria-labelledby="create-album-title">
+      <div>
+        <p class="eyebrow">Empieza una colección</p>
+        <h2 id="create-album-title">Crear álbum</h2>
+        <p>Los álbumes y las fotos aprobadas son visibles para todo el mundo.</p>
+      </div>
+      <form [formGroup]="createForm" (ngSubmit)="createAlbum()">
+        <label>Título del álbum
+          <input formControlName="title" maxlength="120" required />
+        </label>
+        <label>Descripción
+          <textarea formControlName="description" rows="3" maxlength="3000"></textarea>
+        </label>
+        <div class="option-list">
+          <label><input type="checkbox" formControlName="allow_comments" /> Permitir comentarios (se publican tras validación)</label>
+          <label><input type="checkbox" formControlName="allow_uploads" /> Permitir que visitantes envíen fotos para revisión</label>
+        </div>
+        <button class="primary-button" type="submit" [disabled]="saving()">{{ saving() ? 'Creando…' : 'Crear álbum' }}</button>
+      </form>
+    </section>
+
+    <div class="gallery-admin-layout">
+      <section class="album-list-panel" aria-labelledby="album-list-title">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Colecciones</p><h2 id="album-list-title">Álbumes</h2></div>
+          @if (albums().length) { <span class="count-pill">{{ albums().length }}</span> }
+        </div>
+        @if (loading()) {
+          <p role="status">Cargando álbumes…</p>
+        } @else if (!albums().length) {
+          <p class="empty-state">Todavía no hay álbumes. Crea el primero para empezar.</p>
+        } @else {
+          <div class="album-list">
+            @for (album of albums(); track album.id) {
+              <button type="button" class="album-row" [class.selected]="selectedAlbum()?.id === album.id" (click)="selectAlbum(album)">
+                <span class="album-row-copy"><strong>{{ album.title }}</strong><small>{{ album.photo_count }} fotos publicadas</small></span>
+                <span class="pending-counts">
+                  @if (album.pending_photo_count) { <span>{{ album.pending_photo_count }} fotos</span> }
+                  @if (album.pending_comment_count) { <span>{{ album.pending_comment_count }} comentarios</span> }
+                </span>
+              </button>
+            }
+          </div>
+        }
+      </section>
+
+      @if (selectedAlbum(); as album) {
+        <section class="album-management" aria-label="Administrar álbum">
+          <div class="panel album-settings">
+            <div class="panel-heading">
+              <div><p class="eyebrow">Configuración del álbum</p><h2>{{ album.title }}</h2></div>
+              @if (!isEditing()) { <button class="secondary-button" type="button" (click)="editAlbum()">Editar</button> }
+            </div>
+            @if (isEditing()) {
+              <form [formGroup]="albumForm" (ngSubmit)="saveAlbum()">
+                <label>Título
+                  <input formControlName="title" maxlength="120" required />
+                </label>
+                <label>Descripción
+                  <textarea formControlName="description" rows="4" maxlength="3000"></textarea>
+                </label>
+                <div class="option-list">
+                  <label><input type="checkbox" formControlName="allow_comments" /> Permitir comentarios públicos</label>
+                  <label><input type="checkbox" formControlName="allow_uploads" /> Permitir aportaciones de fotos</label>
+                </div>
+                <div class="action-row">
+                  <button class="primary-button" type="submit" [disabled]="saving()">{{ saving() ? 'Guardando…' : 'Guardar cambios' }}</button>
+                  <button class="secondary-button" type="button" (click)="cancelEdit()">Cancelar</button>
+                </div>
+              </form>
+            } @else {
+              <p class="album-description">{{ album.description || 'Sin descripción.' }}</p>
+              <div class="album-flags">
+                <span>{{ album.allow_comments ? 'Comentarios activados' : 'Comentarios desactivados' }}</span>
+                <span>{{ album.allow_uploads ? 'Aportaciones activadas' : 'Aportaciones desactivadas' }}</span>
+              </div>
+            }
+            <button type="button" class="danger-button" (click)="deleteAlbum()" [disabled]="saving()">Eliminar álbum y contenido</button>
+          </div>
+
+          <section class="panel photo-upload" aria-labelledby="photo-upload-title">
+            <div><p class="eyebrow">Almacenamiento público · gallery/{{ album.slug }}/</p><h2 id="photo-upload-title">Añadir fotos</h2><p>Se optimizan en WebP antes de guardarlas. Las fotos que subas aquí se publican directamente.</p></div>
+            <label>Pie de foto <span>(opcional)</span>
+              <input [value]="newPhotoCaption()" (input)="newPhotoCaption.set($any($event.target).value)" maxlength="240" />
+            </label>
+            <label class="file-picker">Seleccionar fotos
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple (change)="uploadPhotos($event)" [disabled]="uploading()" />
+            </label>
+            @if (uploading()) { <p role="status">Optimizando y subiendo fotos…</p> }
+            @if (uploadError()) { <p class="admin-error" role="alert">{{ uploadError() }}</p> }
+            @if (uploadNotice()) { <p class="admin-notice" role="status">{{ uploadNotice() }}</p> }
+          </section>
+
+          <section class="panel review-panel" aria-labelledby="photo-review-title">
+            <div class="panel-heading"><div><p class="eyebrow">Revisión de contenido</p><h2 id="photo-review-title">Fotos · {{ album.photos.length }}</h2></div></div>
+            @if (!album.photos.length) {
+              <p class="empty-state">Este álbum todavía no tiene fotos.</p>
+            } @else {
+              <div class="photo-grid">
+                @for (photo of album.photos; track photo.id) {
+                  <article class="photo-card">
+                    <img [src]="photo.image_url" [alt]="photo.caption || album.title" loading="lazy" />
+                    <div class="photo-card-copy">
+                      <span class="status-badge" [class.pending]="photo.status === 'pending'" [class.rejected]="photo.status === 'rejected'">{{ statusLabel(photo.status) }}</span>
+                      @if (photo.caption) { <p>{{ photo.caption }}</p> }
+                      @if (photo.submitted_by) { <p>Enviada por {{ photo.submitted_by }}</p> }
+                      <time>{{ photo.created_at | date: 'd MMM y, HH:mm' }}</time>
+                      <div class="action-row">
+                        @if (photo.status !== 'approved') { <button class="primary-button" type="button" (click)="moderatePhoto(photo, 'approved')" [disabled]="actionId() === photo.id">Aprobar</button> }
+                        @if (photo.status !== 'rejected') { <button class="secondary-button" type="button" (click)="moderatePhoto(photo, 'rejected')" [disabled]="actionId() === photo.id">{{ photo.status === 'approved' ? 'Retirar' : 'Rechazar' }}</button> }
+                        <button class="quiet-button" type="button" (click)="deletePhoto(photo)" [disabled]="actionId() === photo.id">Eliminar</button>
+                      </div>
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </section>
+
+          @if (album.allow_comments || album.comments.length) {
+            <section class="panel review-panel" aria-labelledby="comment-review-title">
+              <div class="panel-heading"><div><p class="eyebrow">Moderación</p><h2 id="comment-review-title">Comentarios · {{ album.comments.length }}</h2></div></div>
+              @if (!album.comments.length) {
+                <p class="empty-state">Todavía no hay comentarios para revisar.</p>
+              } @else {
+                <div class="comment-list">
+                  @for (comment of album.comments; track comment.id) {
+                    <article class="comment-card">
+                      <div class="comment-meta"><strong>{{ comment.display_name }}</strong><time>{{ comment.created_at | date: 'd MMM y, HH:mm' }}</time><span class="status-badge" [class.pending]="comment.status === 'pending'" [class.rejected]="comment.status === 'rejected'">{{ statusLabel(comment.status) }}</span></div>
+                      <p>{{ comment.message }}</p>
+                      <div class="action-row">
+                        @if (comment.status !== 'approved') { <button class="primary-button" type="button" (click)="moderateComment(comment, 'approved')" [disabled]="actionId() === comment.id">Aprobar</button> }
+                        @if (comment.status !== 'rejected') { <button class="secondary-button" type="button" (click)="moderateComment(comment, 'rejected')" [disabled]="actionId() === comment.id">{{ comment.status === 'approved' ? 'Retirar' : 'Rechazar' }}</button> }
+                      </div>
+                    </article>
+                  }
+                </div>
+              }
+            </section>
+          }
+        </section>
+      }
+    </div>
+  </main>
+</div>
