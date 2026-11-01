@@ -6510,6 +6510,19 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
   }
 });
 
+// En producción Render sirve el frontend ya compilado desde este mismo proceso.
+// Así las llamadas a /api y la cookie de administración permanecen en el mismo
+// origen, sin necesitar un proxy ni CORS entre servicios.
+const frontendBuildRoot = fileURLToPath(
+  new URL("../../frontend/dist/frontend/browser/", import.meta.url),
+);
+app.use(express.static(frontendBuildRoot, {index: false, maxAge: "1y"}));
+app.get(/^(?!\/api(?:\/|$)).*/, (_req, res, next) => {
+  res.sendFile(join(frontendBuildRoot, "index.html"), (error) => {
+    if (error) next(error);
+  });
+});
+
 app.use((err, _req, res, _next) => {
   console.error(err);
   if (err.type === "entity.too.large") {
