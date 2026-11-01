@@ -52,8 +52,13 @@ export async function downloadStorageObject(bucket, path) {
 export async function removeStorageObjects(bucket, paths) {
   const keys = paths.filter((path) => typeof path === "string" && path.length > 0);
   if (!keys.length) return;
-  await getS3Client().send(new DeleteObjectsCommand({
-    Bucket: bucket,
-    Delete: {Objects: keys.map((Key) => ({Key})), Quiet: true},
-  }));
+  for (let offset = 0; offset < keys.length; offset += 1000) {
+    const response = await getS3Client().send(new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: {Objects: keys.slice(offset, offset + 1000).map((Key) => ({Key})), Quiet: true},
+    }));
+    if (response.Errors?.length) {
+      throw new Error(`No se pudieron eliminar ${response.Errors.length} objetos de Supabase Storage.`);
+    }
+  }
 }

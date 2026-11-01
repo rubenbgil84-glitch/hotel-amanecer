@@ -37,6 +37,7 @@
       @if (hasActiveRuralHouse()) {
         <a routerLink="/casa-rural" routerLinkActive="on" (click)="closeMenu()">Casa rural</a>
       }
+      <a routerLink="/galeria" routerLinkActive="on" (click)="closeMenu()">Galería</a>
       <a routerLink="/conocenos" routerLinkActive="on" (click)="closeMenu()">El hotel</a>
       <a routerLink="/contacto" routerLinkActive="on" (click)="closeMenu()">Contacto</a>
       <a routerLink="/" fragment="buscar" class="nav-cta" (click)="closeMenu()">Reservar</a>
@@ -63,6 +64,7 @@
       @if (hasActiveRuralHouse()) {
         <a routerLink="/casa-rural">Casa rural</a>
       }
+      <a routerLink="/galeria">Galería</a>
       <a routerLink="/contacto">Contacto</a>
       <a routerLink="/" fragment="buscar">Reservar</a>
     </section>

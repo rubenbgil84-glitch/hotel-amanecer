@@ -220,6 +220,11 @@ const webImageStorageRoot = fileURLToPath(
 );
 const contactSubmissions = new Map();
 const contactRateLimitWindowMs = 15 * 60 * 1000;
+const gallerySubmissions = new Map();
+const galleryRateLimitWindowMs = 60 * 60 * 1000;
+const gallerySchemaPath = fileURLToPath(
+  new URL("../../db/gallery.sql", import.meta.url),
+);
 const adminLoginAttempts = new Map();
 const adminSessionDurationSeconds = 8 * 60 * 60;
 const adminLoginWindowMs = 15 * 60 * 1000;
@@ -1114,6 +1119,361 @@ app.get("/api/testimonials", async (_req, res, next) => {
         LIMIT 9`,
     );
     res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+function galleryRateLimitReached(req, action, limit) {
+  const now = Date.now();
+  for (const [key, entry] of gallerySubmissions) {
+    if (entry.resetAt <= now) gallerySubmissions.delete(key);
+  }
+  const ip = req.get("x-hotel-client-ip") ?? req.ip ?? "unknown";
+  const key = `${action}:${ip}`;
+  const entry = gallerySubmissions.get(key);
+  if (!entry || entry.resetAt <= now) {
+    gallerySubmissions.set(key, {count: 1, resetAt: now + galleryRateLimitWindowMs});
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > limit;
+}
+
+function validGalleryAlbumId(value) {
+  return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
+}
+
+function validateGalleryAlbum(body) {
+  const errors = [];
+  if (typeof body.title !== "string" || body.title.trim().length < 2 || body.title.trim().length > 120) {
+    errors.push("El título debe tener entre 2 y 120 caracteres.");
+  }
+  if (typeof body.description !== "string" || body.description.trim().length > 3000) {
+    errors.push("La descripción no puede superar los 3000 caracteres.");
+  }
+  if (typeof body.allow_comments !== "boolean" || typeof body.allow_uploads !== "boolean") {
+    errors.push("Las opciones de comentarios y subida deben ser válidas.");
+  }
+  return errors;
+}
+
+function validateGalleryImage(body) {
+  const errors = [];
+  if (!decodeRoomImage(body.image_data_url)) {
+    errors.push("La imagen debe ser JPG, PNG o WebP y no superar los 5 MB.");
+  }
+  if (body.caption !== undefined && (typeof body.caption !== "string" || body.caption.trim().length > 240)) {
+    errors.push("El pie de foto no puede superar los 240 caracteres.");
+  }
+  if (body.submitted_by !== undefined && (typeof body.submitted_by !== "string" || body.submitted_by.trim().length > 80)) {
+    errors.push("El nombre no puede superar los 80 caracteres.");
+  }
+  return errors;
+}
+
+async function storeGalleryImage(album, imageDataUrl) {
+  const image = decodeRoomImage(imageDataUrl);
+  if (!image) throw new Error("La imagen enviada no es válida.");
+  const objectPath = `gallery/${album.slug}/${randomUUID()}.webp`;
+  const optimized = await sharp(image.buffer, {limitInputPixels: 30_000_000})
+    .rotate()
+    .resize({width: 2000, height: 1600, fit: "inside", withoutEnlargement: true})
+    .webp({quality: 82})
+    .toBuffer();
+  await uploadStorageObject(storageBuckets.public, objectPath, optimized, "image/webp");
+  return {objectPath, imageUrl: publicStorageUrl(objectPath)};
+}
+
+app.get("/api/gallery/albums", async (_req, res, next) => {
+  try {
+    const {rows} = await pool.query(
+      `SELECT a.id, a.slug, a.title, a.description, a.allow_comments, a.allow_uploads,
+              a.created_at, a.updated_at,
+              (SELECT count(*)::int FROM gallery_photos p
+                WHERE p.album_id = a.id AND p.status = 'approved') AS photo_count,
+              (SELECT max(p.created_at) FROM gallery_photos p
+                WHERE p.album_id = a.id AND p.status = 'approved') AS latest_upload_at,
+              (SELECT p.image_url FROM gallery_photos p
+                WHERE p.album_id = a.id AND p.status = 'approved'
+                ORDER BY p.created_at DESC, p.id DESC LIMIT 1) AS cover_url
+         FROM gallery_albums a
+        ORDER BY a.created_at DESC, a.id DESC`,
+    );
+    res.set("Cache-Control", "public, max-age=60").json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/gallery/albums/:slug", async (req, res, next) => {
+  try {
+    const {rows: albums} = await pool.query(
+      `SELECT id, slug, title, description, allow_comments, allow_uploads, created_at, updated_at
+         FROM gallery_albums WHERE slug = $1`,
+      [req.params.slug],
+    );
+    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    const album = albums[0];
+    const [{rows: photos}, {rows: comments}] = await Promise.all([
+      pool.query(
+        `SELECT id, image_url, caption, created_at
+           FROM gallery_photos
+          WHERE album_id = $1 AND status = 'approved'
+          ORDER BY created_at, id`,
+        [album.id],
+      ),
+      pool.query(
+        `SELECT id, display_name, message, created_at
+           FROM gallery_comments
+          WHERE album_id = $1 AND status = 'approved'
+          ORDER BY created_at DESC, id DESC
+          LIMIT 100`,
+        [album.id],
+      ),
+    ]);
+    res.set("Cache-Control", "public, max-age=60").json({...album, photos, comments});
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/gallery/albums/:slug/comments", async (req, res, next) => {
+  const displayName = typeof req.body?.display_name === "string" ? req.body.display_name.trim() : "";
+  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  if (displayName.length < 2 || displayName.length > 80 || message.length < 2 || message.length > 1500) {
+    return res.status(400).json({errors: ["Indica un nombre de 2 a 80 caracteres y un comentario de 2 a 1500 caracteres."]});
+  }
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  if (galleryRateLimitReached(req, "comment", 8)) {
+    return res.status(429).json({errors: ["Has enviado varios comentarios recientemente. Inténtalo más tarde."]});
+  }
+  try {
+    const {rows: albums} = await pool.query(
+      "SELECT id, allow_comments FROM gallery_albums WHERE slug = $1",
+      [req.params.slug],
+    );
+    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    if (!albums[0].allow_comments) return res.status(403).json({errors: ["Este álbum no admite comentarios."]});
+    await pool.query(
+      `INSERT INTO gallery_comments (album_id, display_name, message)
+       VALUES ($1, $2, $3)`,
+      [albums[0].id, displayName, message],
+    );
+    res.status(201).json({ok: true, message: "Comentario enviado para revisión."});
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/gallery/albums/:slug/photos", async (req, res, next) => {
+  const errors = validateGalleryImage(req.body ?? {});
+  if (typeof req.body?.submitted_by !== "string" || req.body.submitted_by.trim().length < 2) {
+    errors.push("Indica tu nombre (entre 2 y 80 caracteres).");
+  }
+  if (errors.length) return res.status(400).json({errors});
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  if (galleryRateLimitReached(req, "photo", 5)) {
+    return res.status(429).json({errors: ["Has enviado varias fotos recientemente. Inténtalo más tarde."]});
+  }
+  let saved;
+  try {
+    const {rows: albums} = await pool.query(
+      "SELECT id, slug, allow_uploads FROM gallery_albums WHERE slug = $1",
+      [req.params.slug],
+    );
+    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    const album = albums[0];
+    if (!album.allow_uploads) return res.status(403).json({errors: ["Este álbum no admite nuevas fotos."]});
+    saved = await storeGalleryImage(album, req.body.image_data_url);
+    const {rows} = await pool.query(
+      `INSERT INTO gallery_photos (album_id, object_path, image_url, caption, submitted_by)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, status`,
+      [album.id, saved.objectPath, saved.imageUrl, req.body.caption?.trim() ?? "", req.body.submitted_by.trim()],
+    );
+    res.status(201).json({ok: true, status: rows[0].status, message: "Foto recibida. Aparecerá en el álbum cuando la apruebe el equipo."});
+  } catch (error) {
+    if (saved) {
+      try {
+        await removeStorageObjects(storageBuckets.public, [saved.objectPath]);
+      } catch (cleanupError) {
+        console.error("No se pudo retirar una foto de galería tras fallar su registro.", cleanupError);
+      }
+    }
+    next(error);
+  }
+});
+
+app.get("/api/admin/gallery/albums", requireAdmin, async (_req, res, next) => {
+  try {
+    const {rows} = await pool.query(
+      `SELECT a.id, a.slug, a.title, a.description, a.allow_comments, a.allow_uploads, a.created_at, a.updated_at,
+              (SELECT count(*)::int FROM gallery_photos p WHERE p.album_id = a.id AND p.status = 'approved') AS photo_count,
+              (SELECT count(*)::int FROM gallery_photos p WHERE p.album_id = a.id AND p.status = 'pending') AS pending_photo_count,
+              (SELECT count(*)::int FROM gallery_comments c WHERE c.album_id = a.id AND c.status = 'pending') AS pending_comment_count
+         FROM gallery_albums a ORDER BY a.created_at DESC, a.id DESC`,
+    );
+    res.set("Cache-Control", "no-store").json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/gallery/albums/:id", requireAdmin, async (req, res, next) => {
+  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["El álbum indicado no es válido."]});
+  try {
+    const {rows: albums} = await pool.query("SELECT * FROM gallery_albums WHERE id = $1", [req.params.id]);
+    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    const album = albums[0];
+    const [{rows: photos}, {rows: comments}] = await Promise.all([
+      pool.query(
+        `SELECT id, image_url, caption, submitted_by, status, created_at, moderated_at
+           FROM gallery_photos WHERE album_id = $1 ORDER BY created_at DESC, id DESC`,
+        [album.id],
+      ),
+      pool.query(
+        `SELECT id, display_name, message, status, created_at, moderated_at
+           FROM gallery_comments WHERE album_id = $1 ORDER BY created_at DESC, id DESC`,
+        [album.id],
+      ),
+    ]);
+    res.set("Cache-Control", "no-store").json({...album, photos, comments});
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/gallery/albums", requireAdmin, async (req, res, next) => {
+  const errors = validateGalleryAlbum(req.body ?? {});
+  if (errors.length) return res.status(400).json({errors});
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  const slugBase = req.body.title.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "album";
+  const slug = `${slugBase}-${randomUUID().slice(0, 8)}`;
+  try {
+    const {rows} = await pool.query(
+      `INSERT INTO gallery_albums (slug, title, description, allow_comments, allow_uploads)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [slug, req.body.title.trim(), req.body.description.trim(), req.body.allow_comments, req.body.allow_uploads],
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/admin/gallery/albums/:id", requireAdmin, async (req, res, next) => {
+  const errors = validateGalleryAlbum(req.body ?? {});
+  if (errors.length) return res.status(400).json({errors});
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["El álbum indicado no es válido."]});
+  try {
+    const {rows} = await pool.query(
+      `UPDATE gallery_albums
+          SET title = $2, description = $3, allow_comments = $4, allow_uploads = $5, updated_at = now()
+        WHERE id = $1 RETURNING *`,
+      [req.params.id, req.body.title.trim(), req.body.description.trim(), req.body.allow_comments, req.body.allow_uploads],
+    );
+    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    res.json(rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/gallery/albums/:id/photos", requireAdmin, async (req, res, next) => {
+  const errors = validateGalleryImage(req.body ?? {});
+  if (errors.length) return res.status(400).json({errors});
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["El álbum indicado no es válido."]});
+  let saved;
+  try {
+    const {rows: albums} = await pool.query("SELECT id, slug FROM gallery_albums WHERE id = $1", [req.params.id]);
+    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    saved = await storeGalleryImage(albums[0], req.body.image_data_url);
+    const {rows} = await pool.query(
+      `INSERT INTO gallery_photos (album_id, object_path, image_url, caption, status, moderated_at)
+       VALUES ($1, $2, $3, $4, 'approved', now())
+       RETURNING id, image_url, caption, submitted_by, status, created_at, moderated_at`,
+      [albums[0].id, saved.objectPath, saved.imageUrl, req.body.caption?.trim() ?? ""],
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    if (saved) {
+      try {
+        await removeStorageObjects(storageBuckets.public, [saved.objectPath]);
+      } catch (cleanupError) {
+        console.error("No se pudo retirar una foto de galería tras fallar su registro.", cleanupError);
+      }
+    }
+    next(error);
+  }
+});
+
+app.patch("/api/admin/gallery/photos/:id", requireAdmin, async (req, res, next) => {
+  if (!validGalleryAlbumId(req.params.id) || !["approved", "rejected"].includes(req.body?.status)) {
+    return res.status(400).json({errors: ["El estado de moderación no es válido."]});
+  }
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+    if (!admin) return res.status(401).json({errors: ["Debes iniciar sesión como administrador."]});
+    const {rows} = await pool.query(
+      `UPDATE gallery_photos SET status = $2, moderated_at = now(), moderated_by = $3
+        WHERE id = $1 RETURNING id, status, moderated_at`,
+      [req.params.id, req.body.status, admin.id],
+    );
+    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado la foto."]});
+    res.json(rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/admin/gallery/comments/:id", requireAdmin, async (req, res, next) => {
+  if (!validGalleryAlbumId(req.params.id) || !["approved", "rejected"].includes(req.body?.status)) {
+    return res.status(400).json({errors: ["El estado de moderación no es válido."]});
+  }
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  try {
+    const admin = await getAuthenticatedAdmin(req);
+    if (!admin) return res.status(401).json({errors: ["Debes iniciar sesión como administrador."]});
+    const {rows} = await pool.query(
+      `UPDATE gallery_comments SET status = $2, moderated_at = now(), moderated_by = $3
+        WHERE id = $1 RETURNING id, status, moderated_at`,
+      [req.params.id, req.body.status, admin.id],
+    );
+    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado el comentario."]});
+    res.json(rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/admin/gallery/photos/:id", requireAdmin, async (req, res, next) => {
+  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["La foto indicada no es válida."]});
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  try {
+    const {rows} = await pool.query("SELECT object_path FROM gallery_photos WHERE id = $1", [req.params.id]);
+    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado la foto."]});
+    await removeStorageObjects(storageBuckets.public, [rows[0].object_path]);
+    await pool.query("DELETE FROM gallery_photos WHERE id = $1", [req.params.id]);
+    res.json({ok: true});
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/admin/gallery/albums/:id", requireAdmin, async (req, res, next) => {
+  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["El álbum indicado no es válido."]});
+  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  try {
+    const {rows: photos} = await pool.query("SELECT object_path FROM gallery_photos WHERE album_id = $1", [req.params.id]);
+    await removeStorageObjects(storageBuckets.public, photos.map((photo) => photo.object_path));
+    const {rowCount} = await pool.query("DELETE FROM gallery_albums WHERE id = $1", [req.params.id]);
+    if (!rowCount) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    res.json({ok: true});
   } catch (error) {
     next(error);
   }
@@ -6561,6 +6921,7 @@ async function start() {
         DROP COLUMN IF EXISTS precheckin_document_front_path,
         DROP COLUMN IF EXISTS precheckin_document_back_path;
     `);
+    await pool.query(await readFile(gallerySchemaPath, "utf8"));
     await pool.query(
         `UPDATE site_settings
             SET setting_value = $2, updated_at = now()

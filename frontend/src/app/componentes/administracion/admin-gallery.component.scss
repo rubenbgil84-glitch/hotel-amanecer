@@ -1,0 +1,518 @@
+:host {
+  display: block;
+  min-height: 65vh;
+  background: var(--paper);
+}
+
+.admin-header {
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.admin-header-inner,
+.admin-brand {
+  display: flex;
+  align-items: center;
+}
+
+.admin-header-inner {
+  min-height: 5rem;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-brand {
+  gap: .75rem;
+  color: var(--forest-dark);
+  font-family: var(--display);
+  font-size: 1.3rem;
+  text-decoration: none;
+
+  small {
+    display: block;
+    color: var(--muted);
+    font-family: var(--body);
+    font-size: .68rem;
+  }
+}
+
+.brand-mark {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border: 1px solid var(--clay);
+  border-radius: 50%;
+  color: var(--clay);
+}
+
+.back-link {
+  color: var(--forest);
+  font-size: .85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.gallery-admin-content {
+  padding-block: clamp(2.5rem, 6vw, 5rem);
+}
+
+.page-heading {
+  margin-bottom: 1.5rem;
+
+  h1 {
+    margin-bottom: .6rem;
+    font-size: clamp(2.3rem, 5vw, 4rem);
+  }
+
+  p:not(.eyebrow) {
+    margin: 0;
+    color: var(--muted);
+  }
+}
+
+.panel {
+  min-width: 0;
+  padding: clamp(1rem, 2.5vw, 1.6rem);
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 1.55rem;
+}
+
+.panel .eyebrow {
+  margin-bottom: .4rem;
+}
+
+.create-album {
+  display: grid;
+  grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr);
+  gap: 2rem;
+  margin-bottom: 1.5rem;
+
+  > div > p:last-child {
+    color: var(--muted);
+    font-size: .86rem;
+    line-height: 1.6;
+  }
+}
+
+.create-album form,
+.album-settings form {
+  display: grid;
+  gap: 1rem;
+}
+
+.create-album form > label,
+.album-settings form > label,
+.photo-upload > label:first-of-type {
+  display: grid;
+  gap: .35rem;
+  color: #4c5049;
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.create-album input:not([type='checkbox']),
+.create-album textarea,
+.album-settings input:not([type='checkbox']),
+.album-settings textarea,
+.photo-upload input:not([type='file']) {
+  width: 100%;
+  min-height: 2.8rem;
+  padding: .65rem .75rem;
+  border: 1px solid #d6d3ca;
+  color: var(--ink);
+  font: inherit;
+  font-size: .87rem;
+}
+
+.create-album textarea,
+.album-settings textarea {
+  resize: vertical;
+}
+
+.option-list {
+  display: grid;
+  gap: .65rem;
+
+  label {
+    display: flex;
+    align-items: flex-start;
+    gap: .6rem;
+    color: #535a51;
+    font-size: .82rem;
+    line-height: 1.5;
+  }
+
+  input {
+    flex: 0 0 auto;
+    margin-top: .15rem;
+    accent-color: #315540;
+  }
+}
+
+.primary-button,
+.secondary-button,
+.danger-button,
+.quiet-button {
+  min-height: 2.55rem;
+  padding: .55rem .85rem;
+  border: 1px solid transparent;
+  font: 700 .78rem var(--body);
+  cursor: pointer;
+
+  &:disabled {
+    cursor: wait;
+    opacity: .65;
+  }
+}
+
+.primary-button {
+  background: #244536;
+  color: #fff;
+}
+
+.secondary-button {
+  border-color: #dce0d7;
+  background: #f5f6f2;
+  color: #315540;
+}
+
+.danger-button {
+  margin-top: 1.2rem;
+  border-color: #ead4d0;
+  background: #fff7f5;
+  color: #923d34;
+}
+
+.quiet-button {
+  border-color: #e5e6df;
+  background: #fff;
+  color: #6a5648;
+}
+
+.gallery-admin-layout {
+  display: grid;
+  grid-template-columns: minmax(15rem, .7fr) minmax(0, 1.7fr);
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.album-list-panel {
+  position: sticky;
+  top: 1rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: 1rem;
+
+  h2 {
+    font-size: 1.4rem;
+  }
+}
+
+.count-pill,
+.pending-counts span {
+  display: inline-flex;
+  align-items: center;
+  padding: .25rem .55rem;
+  border-radius: 99px;
+  background: #f3f4ef;
+  color: #596057;
+  font-size: .7rem;
+  font-weight: 700;
+}
+
+.album-list {
+  display: grid;
+  gap: .5rem;
+}
+
+.album-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: .65rem;
+  padding: .8rem;
+  border: 1px solid #e4e6de;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &.selected {
+    border-color: #6d8065;
+    background: #f4f6f0;
+  }
+}
+
+.album-row-copy {
+  display: grid;
+  min-width: 0;
+  gap: .25rem;
+
+  strong {
+    overflow: hidden;
+    color: #2b4336;
+    font-size: .83rem;
+    text-overflow: ellipsis;
+  }
+
+  small {
+    color: var(--muted);
+    font-size: .72rem;
+  }
+}
+
+.pending-counts {
+  display: grid;
+  flex: 0 0 auto;
+  gap: .2rem;
+
+  span {
+    justify-content: center;
+    background: #fff3da;
+    color: #805c16;
+    font-size: .6rem;
+  }
+}
+
+.album-management {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.album-settings .panel-heading {
+  align-items: center;
+}
+
+.album-description {
+  color: #586057;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.album-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+
+  span {
+    padding: .35rem .6rem;
+    background: #f3f4ef;
+    color: #4e5e49;
+    font-size: .72rem;
+  }
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  margin-top: .65rem;
+}
+
+.photo-upload > div > p:last-child {
+  margin: .55rem 0 1rem;
+  color: var(--muted);
+  font-size: .83rem;
+  line-height: 1.5;
+}
+
+.photo-upload > label:first-of-type {
+  max-width: 32rem;
+  margin-bottom: .8rem;
+
+  span {
+    color: var(--muted);
+    font-weight: 400;
+  }
+}
+
+.file-picker {
+  position: relative;
+  display: inline-flex;
+  min-height: 2.8rem;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: .7rem 1rem;
+  border: 1px solid #dce0d7;
+  background: #f5f6f2;
+  color: #315540;
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+
+  input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  &:has(input:disabled) {
+    cursor: wait;
+    opacity: .65;
+  }
+}
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: .8rem;
+}
+
+.photo-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #e5e6df;
+  background: #fafbf8;
+
+  > img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1.35;
+    object-fit: cover;
+    background: #e8e9e2;
+  }
+}
+
+.photo-card-copy {
+  padding: .8rem;
+
+  > p {
+    margin: .45rem 0;
+    color: #586057;
+    font-size: .78rem;
+    line-height: 1.45;
+  }
+
+  time {
+    display: block;
+    margin-top: .45rem;
+    color: var(--muted);
+    font-size: .7rem;
+  }
+}
+
+.status-badge {
+  display: inline-flex;
+  padding: .25rem .55rem;
+  background: #eaf3e9;
+  color: #315d39;
+  font-size: .67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status-badge.pending {
+  background: #fff3da;
+  color: #805c16;
+}
+
+.status-badge.rejected {
+  background: #fbefed;
+  color: #923d34;
+}
+
+.comment-list {
+  display: grid;
+  gap: .65rem;
+}
+
+.comment-card {
+  padding: .9rem;
+  border: 1px solid #e5e6df;
+  background: #fafbf8;
+
+  > p {
+    margin: .75rem 0;
+    color: #535a51;
+    font-size: .86rem;
+    line-height: 1.6;
+    white-space: pre-line;
+  }
+}
+
+.comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+
+  strong {
+    color: #2b4336;
+    font-size: .85rem;
+  }
+
+  time {
+    color: var(--muted);
+    font-size: .72rem;
+  }
+}
+
+.empty-state {
+  color: var(--muted);
+  font-size: .85rem;
+  line-height: 1.55;
+}
+
+.admin-error,
+.admin-notice {
+  margin: 0 0 1rem;
+  padding: .8rem 1rem;
+  border-left: 3px solid;
+  font-size: .85rem;
+}
+
+.admin-error {
+  border-color: #a8473e;
+  background: #fbefed;
+  color: #8d3931;
+}
+
+.admin-notice {
+  border-color: #56805b;
+  background: #eff5ed;
+  color: #315d39;
+}
+
+@media (max-width: 900px) {
+  .gallery-admin-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .album-list-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  .create-album {
+    grid-template-columns: 1fr;
+    gap: .5rem;
+  }
+
+  .admin-header-inner {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-block: 1rem;
+  }
+}

@@ -28,6 +28,16 @@ export const routes: Routes = [
     loadComponent: () => import('./componentes/habitaciones/habitaciones.component').then((module) => module.Rooms),
     title: 'Casa rural · Hotel amanecer en campos',
   },
+  {
+    path: 'galeria',
+    loadComponent: () => import('./componentes/galeria/galeria.component').then((module) => module.Galeria),
+    title: 'Galería · Hotel amanecer en campos',
+  },
+  {
+    path: 'galeria/:slug',
+    loadComponent: () => import('./componentes/galeria/galeria.component').then((module) => module.Galeria),
+    title: 'Álbum de fotos · Hotel amanecer en campos',
+  },
   { path: 'reservas', component: Reservas, title: 'Disponibilidad · Hotel amanecer en campos' },
   { path: 'reservar', component: NuevaReserva, title: 'Reservar habitación · Hotel amanecer en campos' },
   {
@@ -63,6 +73,12 @@ export const routes: Routes = [
         loadComponent: () => import('./componentes/administracion/administracion-habitaciones.component').then((module) => module.AdministracionHabitaciones),
         canActivate: [adminGuard],
         title: 'Habitaciones',
+      },
+      {
+        path: 'galeria',
+        loadComponent: () => import('./componentes/administracion/admin-gallery.component').then((module) => module.AdminGallery),
+        canActivate: [adminGuard],
+        title: 'Galería de fotos',
       },
       {
         path: 'reservas',

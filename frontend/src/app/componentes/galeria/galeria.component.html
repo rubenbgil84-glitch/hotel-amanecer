@@ -1,0 +1,125 @@
+<section class="gallery-hero">
+  <div class="wrap">
+    <p class="eyebrow">Momentos para recordar</p>
+    <h1>{{ album()?.title ?? 'Galería de fotos' }}</h1>
+    <p>{{ album() ? 'Un vistazo a los momentos compartidos en este álbum.' : 'Descubre el hotel y los recuerdos de quienes nos han visitado.' }}</p>
+  </div>
+</section>
+
+<main class="wrap gallery-page">
+  @if (loading()) {
+    <p class="gallery-status" role="status">Cargando galería…</p>
+  } @else if (error()) {
+    <div class="gallery-status gallery-error" role="alert">
+      <p>{{ error() }}</p>
+      <a routerLink="/galeria">Volver a la galería</a>
+    </div>
+  } @else if (album(); as currentAlbum) {
+    <a class="gallery-back" routerLink="/galeria">← Todos los álbumes</a>
+    <section class="album-layout" aria-label="Álbum de fotos">
+      <div class="album-visual">
+        @if (currentAlbum.photos.length) {
+          <app-room-gallery
+            variant="detail"
+            [imageUrls]="photoUrls()"
+            [alt]="activePhoto()?.caption || currentAlbum.title"
+            loading="eager"
+            (imageChanged)="selectPhoto($event)" />
+          @if (activePhoto()?.caption) {
+            <p class="active-caption">{{ activePhoto()?.caption }}</p>
+          }
+        } @else {
+          <div class="no-photos">Este álbum todavía no tiene fotos publicadas.</div>
+        }
+      </div>
+      <aside class="album-info" aria-label="Información del álbum">
+        <p class="eyebrow">El álbum</p>
+        <h2>{{ currentAlbum.title }}</h2>
+        <p class="album-description">{{ currentAlbum.description || 'Un álbum de recuerdos de Hotel Amanecer.' }}</p>
+        <dl class="album-facts">
+          <div><dt>Creado</dt><dd>{{ currentAlbum.created_at | date: 'd MMM y' }}</dd></div>
+          <div><dt>Fotos</dt><dd>{{ currentAlbum.photos.length }}</dd></div>
+          @if (currentAlbum.photos.length) {
+            <div><dt>Última foto</dt><dd>{{ currentAlbum.photos[currentAlbum.photos.length - 1].created_at | date: 'd MMM y' }}</dd></div>
+          }
+        </dl>
+      </aside>
+    </section>
+
+    @if (currentAlbum.allow_uploads || currentAlbum.allow_comments) {
+      <section class="visitor-actions" aria-label="Participa en este álbum">
+        @if (currentAlbum.allow_uploads) {
+          <div class="visitor-form">
+            <p class="eyebrow">Comparte tus recuerdos</p>
+            <h2>¿Tienes fotos de tu visita?</h2>
+            <p>Las fotos se optimizan antes de guardarse y el equipo las revisará antes de publicarlas.</p>
+            <label>Tu nombre
+              <input name="photo-name" type="text" [(ngModel)]="uploadDraft.submitted_by" maxlength="80" required autocomplete="name" />
+            </label>
+            <label>Pie de foto <span>(opcional)</span>
+              <input name="photo-caption" type="text" [(ngModel)]="uploadDraft.caption" maxlength="240" />
+            </label>
+            <label class="file-picker">Seleccionar fotos
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple (change)="uploadPhotos($event)" [disabled]="uploadingPhotos()" />
+            </label>
+            @if (uploadingPhotos()) { <p role="status">Optimizando y enviando fotos…</p> }
+            @if (uploadError()) { <p class="form-error" role="alert">{{ uploadError() }}</p> }
+            @if (uploadNotice()) { <p class="form-success" role="status">{{ uploadNotice() }}</p> }
+          </div>
+        }
+        @if (currentAlbum.allow_comments) {
+          <form class="visitor-form" (ngSubmit)="submitComment()">
+            <p class="eyebrow">Deja un recuerdo</p>
+            <h2>Comenta el álbum</h2>
+            <p>Tu comentario aparecerá después de que lo revise el equipo.</p>
+            <label>Tu nombre
+              <input name="comment-name" type="text" [(ngModel)]="commentDraft.display_name" maxlength="80" required autocomplete="name" />
+            </label>
+            <label>Comentario
+              <textarea name="comment-message" [(ngModel)]="commentDraft.message" maxlength="1500" rows="4" required></textarea>
+            </label>
+            @if (commentError()) { <p class="form-error" role="alert">{{ commentError() }}</p> }
+            @if (commentNotice()) { <p class="form-success" role="status">{{ commentNotice() }}</p> }
+            <button type="submit" [disabled]="submittingComment()">{{ submittingComment() ? 'Enviando…' : 'Enviar comentario' }}</button>
+          </form>
+        }
+      </section>
+    }
+
+    @if (currentAlbum.comments.length) {
+      <section class="published-comments" aria-labelledby="published-comments-title">
+        <p class="eyebrow">Voces del álbum</p>
+        <h2 id="published-comments-title">Comentarios</h2>
+        <div class="comment-grid">
+          @for (comment of currentAlbum.comments; track comment.id) {
+            <article class="published-comment">
+              <p>{{ comment.message }}</p>
+              <strong>{{ comment.display_name }}</strong>
+              <time [attr.datetime]="comment.created_at">{{ comment.created_at | date: 'd MMM y' }}</time>
+            </article>
+          }
+        </div>
+      </section>
+    }
+  } @else if (albums().length) {
+    <section class="album-list" aria-label="Álbumes de fotos">
+      @for (item of albums(); track item.id) {
+        <a class="album-card" [routerLink]="['/galeria', item.slug]">
+          @if (item.cover_url) {
+            <div class="album-cover"><img [src]="item.cover_url" [alt]="item.title" loading="lazy" /></div>
+          } @else {
+            <div class="album-cover album-placeholder"><span aria-hidden="true">A</span></div>
+          }
+          <div class="album-card-copy">
+            <p class="eyebrow">{{ item.created_at | date: 'd MMM y' }}</p>
+            <h2>{{ item.title }}</h2>
+            <p>{{ item.description || 'Descubre las fotos de este álbum.' }}</p>
+            <span>{{ item.photo_count }} {{ item.photo_count === 1 ? 'foto' : 'fotos' }} <span aria-hidden="true">→</span></span>
+          </div>
+        </a>
+      }
+    </section>
+  } @else {
+    <p class="gallery-status">Todavía no hay álbumes publicados. Vuelve pronto para descubrir nuestra galería.</p>
+  }
+</main>

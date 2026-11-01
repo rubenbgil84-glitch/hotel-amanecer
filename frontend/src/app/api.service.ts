@@ -34,6 +34,79 @@ export interface RoomImage {
   position: number;
 }
 
+export interface GalleryAlbum {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  allow_comments: boolean;
+  allow_uploads: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GalleryAlbumSummary extends GalleryAlbum {
+  photo_count: number;
+  latest_upload_at: string | null;
+  cover_url: string | null;
+}
+
+export interface GalleryPhoto {
+  id: string;
+  image_url: string;
+  caption: string;
+  submitted_by: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  moderated_at: string | null;
+}
+
+export interface PublishedGalleryPhoto {
+  id: string;
+  image_url: string;
+  caption: string;
+  created_at: string;
+}
+
+export interface GalleryComment {
+  id: string;
+  display_name: string;
+  message: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  moderated_at: string | null;
+}
+
+export interface PublishedGalleryComment {
+  id: string;
+  display_name: string;
+  message: string;
+  created_at: string;
+}
+
+export interface GalleryAlbumDetail extends GalleryAlbum {
+  photos: PublishedGalleryPhoto[];
+  comments: PublishedGalleryComment[];
+}
+
+export interface AdminGalleryAlbum extends GalleryAlbumSummary {
+  pending_photo_count: number;
+  pending_comment_count: number;
+}
+
+export interface AdminGalleryAlbumDetail {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  allow_comments: boolean;
+  allow_uploads: boolean;
+  created_at: string;
+  updated_at: string;
+  photos: GalleryPhoto[];
+  comments: GalleryComment[];
+}
+
 export interface RoomAvailabilityBlock {
   id: number;
   room_id: number;
@@ -409,6 +482,70 @@ export class ApiService {
 
   rooms() {
     return this.http.get<Room[]>('/api/rooms');
+  }
+
+  galleryAlbums() {
+    return this.http.get<GalleryAlbumSummary[]>('/api/gallery/albums');
+  }
+
+  galleryAlbum(slug: string) {
+    return this.http.get<GalleryAlbumDetail>(`/api/gallery/albums/${encodeURIComponent(slug)}`);
+  }
+
+  submitGalleryComment(slug: string, input: { display_name: string; message: string }) {
+    return this.http.post<{ ok: boolean; message: string }>(
+      `/api/gallery/albums/${encodeURIComponent(slug)}/comments`,
+      input,
+    );
+  }
+
+  uploadGalleryPhoto(slug: string, input: { image_data_url: string; submitted_by: string; caption: string }) {
+    return this.http.post<{ ok: boolean; status: GalleryPhoto['status']; message: string }>(
+      `/api/gallery/albums/${encodeURIComponent(slug)}/photos`,
+      input,
+    );
+  }
+
+  adminGalleryAlbums() {
+    return this.http.get<AdminGalleryAlbum[]>('/api/admin/gallery/albums');
+  }
+
+  adminGalleryAlbum(id: string) {
+    return this.http.get<AdminGalleryAlbumDetail>(`/api/admin/gallery/albums/${id}`);
+  }
+
+  createGalleryAlbum(input: Pick<GalleryAlbum, 'title' | 'description' | 'allow_comments' | 'allow_uploads'>) {
+    return this.http.post<GalleryAlbum>('/api/admin/gallery/albums', input);
+  }
+
+  updateGalleryAlbum(id: string, input: Pick<GalleryAlbum, 'title' | 'description' | 'allow_comments' | 'allow_uploads'>) {
+    return this.http.put<GalleryAlbum>(`/api/admin/gallery/albums/${id}`, input);
+  }
+
+  deleteGalleryAlbum(id: string) {
+    return this.http.delete<{ ok: boolean }>(`/api/admin/gallery/albums/${id}`);
+  }
+
+  uploadAdminGalleryPhoto(id: string, input: { image_data_url: string; caption: string }) {
+    return this.http.post<GalleryPhoto>(`/api/admin/gallery/albums/${id}/photos`, input);
+  }
+
+  moderateGalleryPhoto(id: string, status: 'approved' | 'rejected') {
+    return this.http.patch<{ id: string; status: GalleryPhoto['status']; moderated_at: string }>(
+      `/api/admin/gallery/photos/${id}`,
+      { status },
+    );
+  }
+
+  moderateGalleryComment(id: string, status: 'approved' | 'rejected') {
+    return this.http.patch<{ id: string; status: GalleryComment['status']; moderated_at: string }>(
+      `/api/admin/gallery/comments/${id}`,
+      { status },
+    );
+  }
+
+  deleteGalleryPhoto(id: string) {
+    return this.http.delete<{ ok: boolean }>(`/api/admin/gallery/photos/${id}`);
   }
 
   availableRooms(search: AvailabilitySearch) {
