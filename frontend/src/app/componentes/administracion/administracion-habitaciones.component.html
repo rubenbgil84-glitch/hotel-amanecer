@@ -1,0 +1,263 @@
+<div class="admin-page">
+  <header class="admin-header">
+    <div class="wrap admin-header-inner">
+      <a class="admin-brand" routerLink="/carmen-admin/dashboard">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Hotel Amanecer <small>Administración</small></span>
+      </a>
+      <a class="back-link" routerLink="/carmen-admin/dashboard">Volver al panel</a>
+    </div>
+  </header>
+
+  <main class="wrap room-admin-content">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">Gestión del alojamiento</p>
+        <h1>Habitaciones</h1>
+        <p>Administra precios, servicios, imágenes y periodos no disponibles.</p>
+      </div>
+      <button class="primary-button" type="button" (click)="startCreate()">Añadir habitación</button>
+    </div>
+
+    @if (error()) {
+      <p class="message error-message" role="alert">{{ error() }}</p>
+    }
+    @if (notice()) {
+      <p class="message success-message" role="status">{{ notice() }}</p>
+    }
+
+    @if (editingId() !== null) {
+      <section class="editor" aria-labelledby="room-editor-title">
+        <div class="editor-heading">
+          <div>
+            <p class="eyebrow">{{ editingId() === 'new' ? 'Nueva habitación' : 'Editar alojamiento' }}</p>
+            <h2 id="room-editor-title">{{ editingId() === 'new' ? 'Añadir habitación' : 'Datos de la habitación' }}</h2>
+          </div>
+          <button type="button" class="quiet-button" (click)="cancelEdit()">Cancelar</button>
+        </div>
+
+        <form [formGroup]="form" (ngSubmit)="saveRoom()">
+          <div class="form-grid">
+            <label>
+              Nombre
+              <input type="text" formControlName="name" autocomplete="off" />
+            </label>
+            <label>
+              Tipo de alojamiento
+              <select formControlName="pricing_type" (change)="onPricingTypeChange()">
+                <option value="standard">Habitación estándar</option>
+                <option value="rural_house">Casa rural</option>
+              </select>
+            </label>
+            <label>
+              Categoría para el catálogo público
+              <input type="text" formControlName="catalog_category" maxlength="70" list="room-category-options" [readonly]="form.controls.pricing_type.value === 'rural_house'" />
+              <small>Las habitaciones con la misma categoría se agrupan en el pie de página y en el filtro.</small>
+            </label>
+            <datalist id="room-category-options">
+              <option value="Habitación individual"></option>
+              <option value="Habitación doble"></option>
+              <option value="Suite"></option>
+              <option value="Apartamento"></option>
+            </datalist>
+            @if (form.controls.pricing_type.value === 'standard') {
+              <label>Uso individual (1 huésped) · €/noche
+                <input type="number" formControlName="single_price" min="0" step="0.01" />
+              </label>
+              <label>Uso doble (2 huéspedes) · €/noche
+                <input type="number" formControlName="double_price" min="0.01" step="0.01" />
+              </label>
+              <label>Cama supletoria · €/huésped y noche
+                <input type="number" formControlName="extra_bed_price" min="0" step="0.01" />
+              </label>
+            } @else {
+              <label>Precio fijo de casa rural · €/noche
+                <input type="number" formControlName="price_per_night" min="0.01" step="0.01" />
+              </label>
+            }
+            @if (form.controls.pricing_type.value === 'standard') {
+              <label>
+                Capacidad máxima (incluye camas supletorias)
+                <input type="number" formControlName="capacity" min="1" max="20" step="1" />
+              </label>
+            }
+            <label class="description-field">
+              Descripción
+              <textarea formControlName="description" rows="3"></textarea>
+            </label>
+            <label class="features-field">
+              Características y servicios
+              <textarea formControlName="features" rows="6" placeholder="Una característica por línea"></textarea>
+              <small>Se mostrarán en las tarjetas de habitaciones, reservas y correo de confirmación.</small>
+            </label>
+            <label class="image-field">
+              Imagen de la habitación
+              <input type="file" accept="image/jpeg,image/png,image/webp" (change)="selectImage($event)" />
+              <small>JPG, PNG o WebP · máximo 5 MB. Al guardar, reemplazará la imagen actual.</small>
+              @if (imagePreview()) {
+                <img class="image-preview" [src]="imagePreview()" alt="Vista previa de la habitación" />
+              }
+            </label>
+            <label class="active-field">
+              <input type="checkbox" formControlName="is_active" />
+              Habitación activa y disponible para nuevas reservas
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="quiet-button" (click)="cancelEdit()">Cancelar</button>
+            <button type="submit" class="primary-button" [disabled]="saving()">
+              {{ saving() ? 'Guardando…' : 'Guardar habitación' }}
+            </button>
+          </div>
+        </form>
+
+        @if (editingId() !== 'new') {
+          <section class="blocks-editor" aria-labelledby="blocks-title">
+            <div class="blocks-heading">
+              <div>
+                <h3 id="blocks-title">Bloqueos de disponibilidad</h3>
+                <p>Los días de salida no quedan bloqueados: el intervalo incluye la entrada y termina en la fecha de salida.</p>
+              </div>
+              @if (editingBlockId() !== null) {
+                <span class="editing-block-label">Editando bloqueo</span>
+              }
+            </div>
+            <form [formGroup]="blockForm" (ngSubmit)="addAvailabilityBlockForEditing()" class="block-form">
+              <label>Desde <input type="date" formControlName="start_date" /></label>
+              <label>Hasta / salida <input type="date" formControlName="end_date" /></label>
+              <label class="reason-field">Motivo (opcional) <input type="text" formControlName="reason" maxlength="200" /></label>
+              <div class="block-form-actions">
+                @if (editingBlockId() !== null) {
+                  <button type="button" class="quiet-button" (click)="cancelBlockEdit()">Cancelar edición</button>
+                }
+                <button type="submit" class="secondary-button">
+                  {{ editingBlockId() === null ? 'Añadir bloqueo' : 'Guardar cambios' }}
+                </button>
+              </div>
+            </form>
+            @for (room of rooms() ?? []; track room.id) {
+              @if (room.id === editingId()) {
+                <div class="block-list-section">
+                  <h4>Bloqueos activos <span>{{ room.availability_blocks.length }}</span></h4>
+                  @if (room.availability_blocks.length) {
+                <ul class="block-list">
+                  @for (block of room.availability_blocks; track block.id) {
+                    <li>
+                      <div class="block-dates">
+                        <strong>{{ block.start_date | date: 'dd/MM/yyyy' : 'UTC' }} – {{ block.end_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong>
+                        <span>{{ block.reason || 'Sin motivo indicado' }}</span>
+                      </div>
+                      <div class="block-actions">
+                        <button type="button" class="text-button edit-block-button" (click)="editAvailabilityBlock(block)">Editar</button>
+                        <button type="button" class="text-button" (click)="removeAvailabilityBlock(room, block.id)">Eliminar</button>
+                      </div>
+                    </li>
+                  }
+                </ul>
+                  } @else {
+                    <p class="no-blocks">No hay bloqueos activos para esta habitación.</p>
+                  }
+                </div>
+              }
+            }
+          </section>
+        }
+      </section>
+    }
+
+    @if (loading()) {
+      <p class="empty-state" role="status">Cargando habitaciones…</p>
+    } @else if (rooms()?.length === 0) {
+      <p class="empty-state">Todavía no hay habitaciones. Añade la primera para empezar.</p>
+    } @else {
+      <div class="room-layout">
+        <div class="room-groups">
+          @if (standardRooms().length) {
+            <section aria-labelledby="standard-rooms-title">
+              <h2 class="room-group-title" id="standard-rooms-title">Habitaciones</h2>
+              <div class="room-grid">
+                @for (room of standardRooms(); track room.id) {
+                  <article class="room-card">
+                    @if (room.image_url) {
+                      <img class="room-image" [src]="room.image_url" [alt]="'Imagen de ' + room.name" loading="lazy" />
+                    } @else {
+                      <div class="room-image image-placeholder">Sin imagen</div>
+                    }
+                    <div class="room-card-body">
+                      <label class="room-select"><input type="checkbox" [checked]="selectedRoomIds().includes(room.id)" (change)="toggleRoomSelection(room.id, $event)" /> Seleccionar</label>
+                      <div class="room-title-row"><h2>{{ room.name }}</h2><span class="status-badge" [class.inactive]="!room.is_active">{{ room.is_active ? 'Activa' : 'Desactivada' }}</span></div>
+                      <p class="room-description">{{ room.description }}</p>
+                      <p class="room-meta">{{ room.catalog_category }} · {{ room.single_price | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }} individual · {{ room.double_price | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }} doble · {{ room.extra_bed_price | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }} cama supletoria / noche · {{ room.capacity }} plazas</p>
+                      @if (room.features.length) {
+                        <ul class="feature-list">@for (feature of room.features; track feature) { <li>{{ feature }}</li> }</ul>
+                      }
+                      @if (room.availability_blocks.length) { <p class="block-count">{{ room.availability_blocks.length }} periodo(s) bloqueado(s)</p> }
+                      <div class="card-actions">
+                        <button type="button" class="secondary-button" (click)="startEdit(room)">Editar</button>
+                        <button type="button" class="quiet-button" (click)="toggleRoom(room)">{{ room.is_active ? 'Desactivar' : 'Activar' }}</button>
+                        <button type="button" class="delete-button" (click)="deleteRoom(room)">Eliminar</button>
+                      </div>
+                    </div>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+          @if (ruralHouses().length) {
+            <section aria-labelledby="rural-house-title">
+              <h2 class="room-group-title" id="rural-house-title">Casa rural</h2>
+              <div class="room-grid">
+                @for (room of ruralHouses(); track room.id) {
+                  <article class="room-card">
+                    @if (room.image_url) {
+                      <img class="room-image" [src]="room.image_url" [alt]="'Imagen de ' + room.name" loading="lazy" />
+                    } @else {
+                      <div class="room-image image-placeholder">Sin imagen</div>
+                    }
+                    <div class="room-card-body">
+                      <label class="room-select"><input type="checkbox" [checked]="selectedRoomIds().includes(room.id)" (change)="toggleRoomSelection(room.id, $event)" /> Seleccionar</label>
+                      <div class="room-title-row"><h2>{{ room.name }}</h2><span class="status-badge" [class.inactive]="!room.is_active">{{ room.is_active ? 'Activa' : 'Desactivada' }}</span></div>
+                      <p class="room-description">{{ room.description }}</p>
+                      <p class="room-meta">{{ room.catalog_category }} · {{ room.price_per_night | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }} / noche · hasta 13 personas</p>
+                      @if (room.features.length) {
+                        <ul class="feature-list">@for (feature of room.features; track feature) { <li>{{ feature }}</li> }</ul>
+                      }
+                      @if (room.availability_blocks.length) { <p class="block-count">{{ room.availability_blocks.length }} periodo(s) bloqueado(s)</p> }
+                      <div class="card-actions">
+                        <button type="button" class="secondary-button" (click)="startEdit(room)">Editar</button>
+                        <button type="button" class="quiet-button" (click)="toggleRoom(room)">{{ room.is_active ? 'Desactivar' : 'Activar' }}</button>
+                        <button type="button" class="delete-button" (click)="deleteRoom(room)">Eliminar</button>
+                      </div>
+                    </div>
+                  </article>
+                }
+              </div>
+            </section>
+          }
+        </div>
+        <aside class="bulk-options" aria-labelledby="bulk-options-title">
+          <div class="bulk-heading">
+            <div><p class="eyebrow">Acciones masivas</p><h2 id="bulk-options-title">Opciones</h2></div>
+            <label><input type="checkbox" [checked]="rooms()?.length === selectedRoomCount() && selectedRoomCount() > 0" (change)="selectAllRooms($event)" /> Seleccionar todas</label>
+            <p>{{ selectedRoomCount() }} seleccionada(s)</p>
+          </div>
+          <form [formGroup]="bulkPrices" (ngSubmit)="applyBulkAction('set_prices')" class="bulk-price-form">
+            <h3>Aplicar precios a la selección</h3>
+            <label>Individual (€)<input type="number" formControlName="single_price" min="0" step="0.01" /></label>
+            <label>Doble (€)<input type="number" formControlName="double_price" min="0.01" step="0.01" /></label>
+            <label>Cama supletoria por huésped/noche (€)<input type="number" formControlName="extra_bed_price" min="0" step="0.01" /></label>
+            <label>Casa rural por noche (€)<input type="number" formControlName="rural_house_price" min="0.01" step="0.01" /></label>
+            <button type="submit" class="secondary-button" [disabled]="saving()">Actualizar precios</button>
+          </form>
+          <div class="bulk-actions">
+            <h3>Estado y eliminación</h3>
+            <button type="button" class="secondary-button" (click)="applyBulkAction('activate')" [disabled]="saving()">Activar selección</button>
+            <button type="button" class="quiet-button" (click)="applyBulkAction('deactivate')" [disabled]="saving()">Desactivar selección</button>
+            <button type="button" class="delete-button" (click)="applyBulkAction('delete')" [disabled]="saving()">Eliminar selección</button>
+            <small>Los alojamientos con reservas históricas se conservan.</small>
+          </div>
+        </aside>
+      </div>
+    }
+  </main>
+</div>

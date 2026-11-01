@@ -1,0 +1,121 @@
+<section class="hero" aria-labelledby="hero-title">
+  <img
+    class="hero-image"
+    [src]="siteContent.settings().hero_image_path"
+    alt=""
+    fetchpriority="high"
+    width="2200"
+    height="1400" />
+  <div class="hero-shade" aria-hidden="true"></div>
+  <div class="hero-in wrap">
+    <div class="hero-copy">
+      <p class="eyebrow">{{ siteContent.settings().hero_eyebrow }}</p>
+      <h1 id="hero-title">{{ siteContent.settings().hero_title }}</h1>
+      <p>{{ siteContent.settings().hero_description }}</p>
+      <a class="text-link text-link--light" routerLink="/habitaciones">{{ siteContent.settings().hero_link_label }} <span aria-hidden="true">→</span></a>
+    </div>
+  </div>
+  <div class="availability-panel wrap" id="buscar">
+    <app-availability-search />
+  </div>
+</section>
+
+<div class="promise-strip" aria-label="Lo que te espera">
+  <div class="wrap promise-grid">
+    <p><span aria-hidden="true">01</span>{{ siteContent.settings().promise_1 }}</p>
+    <p><span aria-hidden="true">02</span>{{ siteContent.settings().promise_2 }}</p>
+    <p><span aria-hidden="true">03</span>{{ siteContent.settings().promise_3 }}</p>
+  </div>
+</div>
+
+<section class="section intro wrap" id="experiencia" aria-labelledby="intro-title">
+  <div class="intro-visual">
+    <img
+      class="intro-image"
+      [src]="siteContent.settings().intro_image_path"
+      [alt]="siteContent.settings().intro_image_alt"
+      loading="lazy"
+      width="1200"
+      height="1400" />
+    <div class="intro-note"><span>{{ siteContent.settings().intro_note_top }}</span><strong>{{ siteContent.settings().intro_note_bottom }}</strong></div>
+  </div>
+  <div class="intro-copy">
+    <p class="eyebrow">{{ siteContent.settings().intro_eyebrow }}</p>
+    <h2 id="intro-title">{{ siteContent.settings().intro_title }}</h2>
+    <p>{{ siteContent.settings().intro_description }}</p>
+    <a class="text-link" routerLink="/conocenos">{{ siteContent.settings().intro_link_label }} <span aria-hidden="true">→</span></a>
+  </div>
+</section>
+
+<section class="section rooms-section" aria-labelledby="rooms-title">
+  <div class="wrap">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Tu rincón favorito</p>
+        <h2 id="rooms-title">Habitaciones para estar bien.</h2>
+      </div>
+      <a class="text-link" routerLink="/habitaciones">Ver todas <span aria-hidden="true">→</span></a>
+    </div>
+  @if (rooms() === undefined) {
+    <p class="muted" role="status">Cargando habitaciones…</p>
+  } @else if (rooms() === null) {
+    <p class="muted" role="alert">No se pudieron cargar las habitaciones. Comprueba que la base de datos y el backend estén en marcha.</p>
+  } @else {
+    <div class="rooms">
+      @for (r of rooms(); track r.id; let i = $index) {
+        <app-room-card [room]="r" [index]="i" />
+      }
+    </div>
+  }
+  </div>
+</section>
+
+<section class="experience">
+  <div class="experience-image" role="img" [attr.aria-label]="siteContent.settings().experience_image_alt"
+    [style.background-image]="'url(' + siteContent.settings().experience_image_path + ')'"></div>
+  <div class="experience-content">
+    <p class="eyebrow">{{ siteContent.settings().experience_eyebrow }}</p>
+    <h2>{{ siteContent.settings().experience_title }}</h2>
+    <p>{{ siteContent.settings().experience_description }}</p>
+    <div class="experience-points">
+      <p><span aria-hidden="true">✳</span> {{ siteContent.settings().experience_point_1 }}</p>
+      <p><span aria-hidden="true">✳</span> {{ siteContent.settings().experience_point_2 }}</p>
+      <p><span aria-hidden="true">✳</span> {{ siteContent.settings().experience_point_3 }}</p>
+    </div>
+    <a class="text-link" routerLink="/habitaciones">{{ siteContent.settings().experience_link_label }} <span aria-hidden="true">→</span></a>
+  </div>
+</section>
+
+@if (testimonials().length) {
+<section class="section testimonials wrap" aria-labelledby="guest-title">
+  <div class="testimonials-heading">
+    <p class="eyebrow">{{ siteContent.settings().testimonials_eyebrow }}</p>
+    <h2 id="guest-title">{{ siteContent.settings().testimonials_title }}</h2>
+  </div>
+  <div class="quotes">
+    @for (testimonial of testimonials(); track $index) {
+      <figure class="quote-card">
+        <div class="quote-stars" [attr.aria-label]="testimonial.rating + ' de 5 estrellas'">
+          {{ '★'.repeat(testimonial.rating) }}{{ '☆'.repeat(5 - testimonial.rating) }}
+        </div>
+        <blockquote>“{{ testimonial.message }}”</blockquote>
+        <figcaption>
+          <strong>{{ testimonial.display_name }}</strong>
+          <span>{{ travelTypeLabel(testimonial) }}</span>
+          <span>Opinión enviada el {{ submittedAtLabel(testimonial) }}</span>
+        </figcaption>
+      </figure>
+    }
+  </div>
+</section>
+}
+
+<section class="last-call" aria-labelledby="last-call-title">
+  <div class="wrap last-call-inner">
+    <div>
+      <p class="eyebrow">{{ siteContent.settings().last_call_eyebrow }}</p>
+      <h2 id="last-call-title">{{ siteContent.settings().last_call_title }}</h2>
+    </div>
+    <a class="btn btn--light" routerLink="/" fragment="buscar">Consulta disponibilidad <span aria-hidden="true">→</span></a>
+  </div>
+</section>

@@ -1,0 +1,13 @@
+{
+  "name": "hotel-gateway",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --env-file=../.env src/index.js",
+    "start": "node --env-file=../.env src/index.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "http-proxy-middleware": "^3.0.5"
+  }
+}

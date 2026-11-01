@@ -1,0 +1,47 @@
+<section class="rooms-hero">
+  <div class="wrap rooms-hero-inner">
+    <p class="eyebrow">Tu próxima estancia</p>
+    <h1>Habitaciones disponibles</h1>
+    <p>Estas son las opciones que encajan con las fechas y el número de huéspedes que has elegido.</p>
+  </div>
+</section>
+
+<section class="section wrap rooms-list" aria-labelledby="available-rooms-title">
+  @if (state(); as result) {
+    @if (result.status === 'invalid') {
+      <div class="availability-message">
+        <h2 id="available-rooms-title">Completa tu búsqueda</h2>
+        <p>Para consultar habitaciones disponibles, indica las fechas y el número de huéspedes.</p>
+        <a class="btn" routerLink="/" fragment="buscar">Volver a la búsqueda</a>
+      </div>
+    } @else if (result.status === 'loading') {
+      <p class="muted" role="status">Consultando disponibilidad…</p>
+    } @else if (result.status === 'error') {
+      <div class="availability-message" role="alert">
+        <h2 id="available-rooms-title">No se pudo consultar la disponibilidad</h2>
+        <p>Comprueba que el backend y la base de datos estén en marcha e inténtalo de nuevo.</p>
+        <a class="btn" routerLink="/" fragment="buscar">Cambiar búsqueda</a>
+      </div>
+    } @else {
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">{{ result.search.check_in }} — {{ result.search.check_out }}</p>
+          <h2 id="available-rooms-title">
+            {{ result.rooms.length ? 'Elige tu habitación' : 'No hay habitaciones disponibles' }}
+          </h2>
+        </div>
+        <a class="text-link" routerLink="/" fragment="buscar">Cambiar búsqueda <span aria-hidden="true">→</span></a>
+      </div>
+      <p class="muted">{{ result.search.adults }} adultos · {{ result.search.children }} niños</p>
+      @if (result.rooms.length) {
+        <div class="rooms">
+          @for (room of result.rooms; track room.id; let i = $index) {
+            <app-room-card [room]="room" [index]="i" [reservationSearch]="result.search" />
+          }
+        </div>
+      } @else {
+        <p>Prueba con otras fechas o con un número distinto de huéspedes.</p>
+      }
+    }
+  }
+</section>

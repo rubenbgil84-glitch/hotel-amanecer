@@ -1,0 +1,96 @@
+<main>
+  <section class="about-hero" aria-labelledby="about-title">
+    <img
+      class="about-hero-image"
+      [src]="settings().hero_image_path"
+      alt="Interior acogedor de un alojamiento rural"
+      fetchpriority="high"
+      width="2200"
+      height="1200" />
+    <div class="about-hero-shade" aria-hidden="true"></div>
+    <div class="about-hero-copy wrap">
+      <p class="eyebrow">{{ settings().about_hero_eyebrow }}</p>
+      <h1 id="about-title">{{ settings().about_hero_title }}</h1>
+      <p>{{ settings().about_hero_description }}</p>
+      <a class="about-button" routerLink="/" fragment="buscar">Planifica tu estancia <span aria-hidden="true">→</span></a>
+    </div>
+  </section>
+
+  <section class="welcome-section wrap" aria-labelledby="welcome-title">
+    <div class="welcome-copy">
+      <p class="eyebrow">{{ settings().about_welcome_eyebrow }}</p>
+      <h2 id="welcome-title">{{ settings().about_welcome_title }}</h2>
+      <p>{{ settings().about_welcome_description }}</p>
+      <a class="text-link" routerLink="/habitaciones">Descubre las habitaciones <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="welcome-image">
+      <img
+        [src]="settings().intro_image_path"
+        alt="Habitación luminosa preparada para recibir a los huéspedes"
+        loading="lazy"
+        width="1100"
+        height="850" />
+      <p><strong>14</strong><span>habitaciones para descansar a tu ritmo</span></p>
+    </div>
+  </section>
+
+  <section class="comfort-section" aria-labelledby="comfort-title">
+    <div class="wrap comfort-inner">
+      <div>
+        <p class="eyebrow">Lo esencial, bien cuidado</p>
+        <h2 id="comfort-title">Comodidad para sentirte a gusto.</h2>
+      </div>
+      <div class="comfort-content">
+        <p>Las habitaciones disponen de baño privado, calefacción, televisión y conexión Wi-Fi. Algunas tienen balcón; consulta disponibilidad y necesidades de accesibilidad al hacer tu reserva.</p>
+        <ul class="comfort-list">
+          <li><span aria-hidden="true">01</span> Habitaciones individuales y dobles</li>
+          <li><span aria-hidden="true">02</span> Opciones para familias y grupos</li>
+          <li><span aria-hidden="true">03</span> Limpieza diaria</li>
+          <li><span aria-hidden="true">04</span> Atención e información sobre la zona</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="services-section wrap" aria-labelledby="services-title">
+    <div class="section-intro">
+      <p class="eyebrow">{{ settings().about_services_eyebrow }}</p>
+      <h2 id="services-title">{{ settings().about_services_title }}</h2>
+      <p>{{ settings().about_services_description }}</p>
+    </div>
+    <div class="service-grid">
+      @for (service of services(); track $index) {
+        <article class="service-card">
+          <span class="service-number">{{ $index + 1 < 10 ? '0' : '' }}{{ $index + 1 }}</span>
+          <h3>{{ service.title }}</h3>
+          <p>{{ service.description }}</p>
+        </article>
+      }
+    </div>
+    <p class="service-note">{{ settings().about_services_note }}</p>
+  </section>
+
+  <section class="area-section" aria-labelledby="area-title">
+    <div class="area-image" role="img" aria-label="Paisaje de Tierra de Campos"></div>
+    <div class="area-copy">
+      <p class="eyebrow">A tu alrededor</p>
+      <h2 id="area-title">Palencia se descubre sin prisa.</h2>
+      <p>Desde Población de Campos puedes acercarte al Canal de Castilla, visitar la iglesia de San Martín de Tours en Frómista y seguir explorando las rutas culturales y paisajes de Tierra de Campos.</p>
+      <p>Pregúntanos: estaremos encantados de recomendarte una visita según el tiempo que tengas y la forma en que te gusta viajar.</p>
+      <a class="text-link" routerLink="/reservas">Organiza tu estancia <span aria-hidden="true">→</span></a>
+    </div>
+  </section>
+
+  <section class="about-cta" aria-labelledby="about-cta-title">
+    <div class="wrap about-cta-inner">
+      <div>
+        <p class="eyebrow">Te esperamos en el Camino</p>
+        <h2 id="about-cta-title">¿Preparamos tu próxima parada?</h2>
+      </div>
+      <div class="cta-links">
+        <a class="about-button" routerLink="/" fragment="buscar">Consultar disponibilidad <span aria-hidden="true">→</span></a>
+        <a class="text-link" routerLink="/habitaciones">Ver habitaciones <span aria-hidden="true">→</span></a>
+      </div>
+    </div>
+  </section>
+</main>

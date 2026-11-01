@@ -1,0 +1,188 @@
+<section class="rooms-hero">
+  <div class="wrap rooms-hero-inner">
+    <p class="eyebrow">Antes de tu llegada</p>
+    <h1>Pre-check-in</h1>
+    <p>Completa tus datos para agilizar la recepción. El enlace es personal y solo se puede utilizar una vez.</p>
+  </div>
+</section>
+
+<section class="section wrap precheck-page">
+  @if (status() === 'loading') {
+    <p class="muted" role="status">Comprobando el enlace…</p>
+  } @else if (status() === 'invalid') {
+    <div class="precheck-message" role="alert">
+      <h2>Enlace no disponible</h2>
+      <p>{{ errors()[0] || 'Comprueba que has abierto el enlace del correo y que está dentro del plazo de pre-check-in.' }}</p>
+    </div>
+  } @else if (status() === 'success') {
+    <div class="precheck-message" role="status">
+      <p class="eyebrow">Todo listo</p>
+      <h2>Pre-check-in completado</h2>
+      <p>Hemos guardado tus datos para la reserva <strong>{{ booking()?.reservation_code }}</strong>.</p>
+    </div>
+  } @else if (booking(); as stay) {
+    <div class="stay-card">
+      <p class="eyebrow">Tu estancia</p>
+      <h2>{{ stay.reservation_code }}</h2>
+      <p>{{ stay.check_in | date: 'longDate' }} — {{ stay.check_out | date: 'longDate' }}</p>
+      <p>{{ stay.adults }} adultos · {{ stay.children }} niños · {{ stay.breakfast ? 'Desayuno incluido' : 'Sin desayuno' }}</p>
+    </div>
+
+    <form class="precheck-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="form-heading">
+        <p class="eyebrow">Documentación</p>
+        <h2>Documento de identidad</h2>
+      </div>
+
+      <div class="form-grid">
+        <fieldset class="document-type field-wide">
+          <legend>Tipo de documento</legend>
+          <label class="radio-option">
+            <input type="radio" formControlName="document_type" value="identity" />
+            DNI / NIE / Otro
+          </label>
+          <label class="radio-option">
+            <input type="radio" formControlName="document_type" value="passport" />
+            Pasaporte
+          </label>
+        </fieldset>
+        <label class="document-upload" [class.field-wide]="isPassport">
+          <span>Imagen frontal</span>
+          <input type="file" accept="image/jpeg,image/png,image/webp" (change)="onDocumentSelected($event, 'front')" />
+          @if (frontPreview(); as preview) {
+            <img class="document-preview" [src]="preview" alt="Vista previa de la parte frontal del documento" />
+          }
+        </label>
+        @if (!isPassport) {
+          <label class="document-upload">
+            <span>Imagen trasera</span>
+            <input type="file" accept="image/jpeg,image/png,image/webp" (change)="onDocumentSelected($event, 'back')" />
+            @if (backPreview(); as preview) {
+              <img class="document-preview" [src]="preview" alt="Vista previa de la parte trasera del documento" />
+            }
+          </label>
+        }
+        @if (ocrStatus()) {
+          <p class="field-note field-wide" role="status">{{ ocrStatus() }}</p>
+        }
+        <label>Número de documento
+          <input type="text" formControlName="identity_document" autocomplete="off" />
+        </label>
+        <label>Número de soporte @if (isPassport) { (opcional) }
+          <input type="text" formControlName="document_support_number" autocomplete="off" />
+        </label>
+        <label>Fecha de expedición
+          <input type="date" formControlName="document_issue_date" />
+        </label>
+        <label>Fecha de caducidad
+          <input type="date" formControlName="document_expiry_date" />
+        </label>
+        <p class="field-note field-wide">Sube imágenes claras y completas. Se guardarán junto con los datos del pre-check-in.</p>
+      </div>
+
+      <div class="form-heading subsection">
+        <p class="eyebrow">Datos del viajero</p>
+        <h2>Completa tu información</h2>
+      </div>
+      <div class="form-grid">
+        <label>Nombre
+          <input type="text" formControlName="first_name" autocomplete="given-name" />
+        </label>
+        <label>Primer apellido
+          <input type="text" formControlName="first_surname" autocomplete="family-name" />
+        </label>
+        <label>Segundo apellido
+          <input type="text" formControlName="second_surname" autocomplete="off" />
+        </label>
+        <label>Fecha de nacimiento
+          <input type="date" formControlName="birth_date" autocomplete="bday" />
+        </label>
+        <label>Sexo
+          <select formControlName="sex">
+            <option value="">Elige</option>
+            <option value="female">Mujer</option>
+            <option value="male">Hombre</option>
+            <option value="other">Otro</option>
+          </select>
+        </label>
+        <label>Nacionalidad
+          <input type="text" formControlName="nationality" autocomplete="country-name" />
+        </label>
+        <label class="field-wide">Dirección habitual
+          <input type="text" formControlName="address" autocomplete="street-address" />
+        </label>
+        <label>Localidad
+          <input type="text" formControlName="city" autocomplete="address-level2" />
+        </label>
+        <label>País de residencia
+          <input type="text" formControlName="country" autocomplete="country-name" />
+        </label>
+      </div>
+
+      <div class="form-heading subsection">
+        <p class="eyebrow">Contacto y preferencias</p>
+        <h3>Detalles de llegada</h3>
+      </div>
+      <div class="form-grid">
+        <label>Teléfono fijo (opcional)
+          <input type="tel" formControlName="phone_landline" autocomplete="tel" />
+        </label>
+        <label>Teléfono móvil
+          <input type="tel" formControlName="phone_mobile" autocomplete="tel" />
+        </label>
+        <label class="field-wide">Correo electrónico
+          <input type="email" formControlName="email" autocomplete="email" />
+        </label>
+        <label>Total de viajeros
+          <input type="number" formControlName="traveler_count" min="1" max="10" />
+        </label>
+        <label>Hora estimada de llegada
+          <input type="time" formControlName="arrival_time" />
+        </label>
+        <label>Hora estimada de salida
+          <input type="time" formControlName="departure_time" />
+        </label>
+        @if (stay.children > 0) {
+          <label class="field-wide">Parentesco de los menores con el titular
+            <input type="text" formControlName="minor_relationships" />
+          </label>
+        }
+        <label>Tipo de cama
+          <select formControlName="preferred_bed">
+            @if (isIndividualBed) {
+              <option value="individual">Individual</option>
+            } @else {
+              <option value="any">Sin preferencia</option>
+              <option value="double">Doble</option>
+              <option value="twin">Dos camas</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <div class="consents">
+        <label class="check-field">
+          <input type="checkbox" formControlName="terms_accepted" />
+          Confirmo que los datos son correctos y acepto las condiciones generales de la estancia.
+        </label>
+        <label class="check-field">
+          <input type="checkbox" formControlName="marketing_consent" />
+          Autorizo recibir comunicaciones comerciales (opcional).
+        </label>
+        <label>Firma digital (escribe tu nombre completo)
+          <input type="text" formControlName="digital_signature" autocomplete="name" />
+        </label>
+      </div>
+
+      @if (errors().length) {
+        <ul class="errors" role="alert">
+          @for (error of errors(); track error) { <li>{{ error }}</li> }
+        </ul>
+      }
+
+      <button type="submit" class="btn" [disabled]="status() === 'sending'">
+        {{ status() === 'sending' ? 'Guardando…' : 'Completar pre-check-in' }}
+      </button>
+    </form>
+  }
+</section>

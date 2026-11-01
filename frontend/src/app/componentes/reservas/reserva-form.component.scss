@@ -1,0 +1,296 @@
+:host {
+  display: block;
+}
+
+.book-done {
+  max-width: 760px;
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border: 1px solid var(--line);
+  background: var(--paper);
+
+  h2 {
+    margin-bottom: .75rem;
+  }
+}
+
+.booking-reference {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  color: var(--forest-dark);
+  font: 700 1.2rem/1.4 var(--body);
+  letter-spacing: .06em;
+  overflow-wrap: anywhere;
+}
+
+.booking-details {
+  margin: 0;
+  padding: 1rem 0;
+  border-block: 1px solid var(--line);
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-block: .35rem;
+    font-size: .85rem;
+  }
+
+  dt {
+    color: var(--muted);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+    text-align: right;
+  }
+
+  .booking-total {
+    margin-top: .5rem;
+    padding-top: .75rem;
+    border-top: 1px solid var(--line);
+    color: var(--forest-dark);
+    font-size: 1rem;
+  }
+}
+
+.email-notice,
+.countdown-label {
+  color: var(--muted);
+  font-size: .8rem;
+}
+
+.email-notice {
+  margin-top: 1rem;
+}
+
+.countdown-track {
+  height: 5px;
+  overflow: hidden;
+  background: var(--line);
+
+  span {
+    display: block;
+    height: 100%;
+    background: var(--olive);
+    transition: width 1s linear;
+  }
+}
+
+.countdown-label {
+  margin-block: .5rem 1rem;
+}
+
+.reservation-layout {
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  align-items: start;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+}
+
+.room-summary,
+.reservation-form {
+  min-width: 0;
+  padding: clamp(1.2rem, 3vw, 2rem);
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.room-summary {
+  position: sticky;
+  top: 7rem;
+}
+
+.summary-image {
+  aspect-ratio: 1.45;
+  margin: calc(clamp(1.2rem, 3vw, 2rem) * -1);
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+  background: #e9e4d8;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.summary-content {
+  h2 {
+    margin-bottom: .75rem;
+    font-size: clamp(2rem, 3vw, 2.8rem);
+  }
+}
+
+.room-description {
+  color: var(--muted);
+  font-size: .9rem;
+}
+
+.room-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-block: 1rem 1.5rem;
+}
+
+.room-tag {
+  padding: .35rem .65rem;
+  color: var(--forest);
+  background: var(--paper);
+  font-size: .72rem;
+  line-height: 1.4;
+}
+
+.room-price {
+  margin: 0;
+  color: var(--forest-dark);
+  font: 500 1.8rem/1.2 var(--display);
+
+  span {
+    color: var(--muted);
+    font: 400 .8rem/1.4 var(--body);
+  }
+}
+
+.price-summary {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+
+  h3 {
+    margin-bottom: .85rem;
+    font: 700 .78rem/1.4 var(--body);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-block: .55rem;
+    color: var(--muted);
+    font-size: .82rem;
+
+    strong {
+      flex: 0 0 auto;
+      color: var(--ink);
+      font-weight: 600;
+    }
+  }
+
+  .price-total {
+    margin-top: .9rem;
+    padding-top: .8rem;
+    border-top: 1px solid var(--line);
+    color: var(--forest-dark);
+    font-size: .9rem;
+
+    strong {
+      color: var(--forest-dark);
+      font-size: 1.1rem;
+    }
+  }
+
+  > p {
+    margin: .75rem 0 0;
+    color: var(--muted);
+    font-size: .7rem;
+  }
+
+  .price-note, .discount-row {
+    color: #315d39;
+    font-size: .73rem;
+  }
+}
+
+.form-heading {
+  margin-bottom: 1.5rem;
+
+  h2 {
+    margin: 0;
+    font-size: clamp(2rem, 3vw, 2.8rem);
+  }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+
+  .field-wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.form-grid label {
+  display: grid;
+  min-width: 0;
+  gap: .35rem;
+  color: #4c5049;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.form-grid input,
+.form-grid select,
+.form-grid textarea {
+  width: 100%;
+  min-height: 46px;
+  padding: .6rem .7rem;
+  border: 1px solid #d6d3ca;
+  border-radius: 0;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+  font-size: .85rem;
+
+  &:focus {
+    border-color: var(--olive);
+  }
+}
+
+.form-grid textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.discount-input > label { margin-bottom: .35rem; color: #4c5049; font-size: .75rem; font-weight: 700; }
+.discount-input > div { display: flex; gap: .55rem; }
+.discount-input input { min-width: 0; flex: 1; }
+.discount-input button { flex: 0 0 auto; padding-inline: .85rem; }
+
+.reservation-form > .btn {
+  margin-top: .25rem;
+}
+
+@media (max-width: 900px) {
+  .reservation-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .room-summary {
+    position: static;
+  }
+}
+
+@media (max-width: 480px) {
+  .room-summary,
+  .reservation-form {
+    padding: 1rem;
+  }
+
+  .summary-image {
+    margin: -1rem -1rem 1.2rem;
+  }
+
+  .form-grid {
+    gap: .75rem;
+  }
+
+  .discount-input > div { align-items: stretch; flex-direction: column; }
+}

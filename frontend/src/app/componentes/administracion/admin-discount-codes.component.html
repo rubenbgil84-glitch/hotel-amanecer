@@ -1,0 +1,159 @@
+<div class="admin-page">
+  <header class="admin-header">
+    <div class="wrap admin-header-inner">
+      <a class="admin-brand" routerLink="/carmen-admin/dashboard">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Hotel Amanecer <small>Administración</small></span>
+      </a>
+      <a class="back-link" routerLink="/carmen-admin/dashboard">Volver al panel</a>
+    </div>
+  </header>
+
+  <main class="wrap discount-page">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">Promociones</p>
+        <h1>Códigos de descuento</h1>
+        <p>Define el porcentaje, vigencia, importe mínimo, número de usos y fechas excluidas.</p>
+      </div>
+      <button class="primary-button" type="button" (click)="startCreate()">Crear código</button>
+    </div>
+
+    @if (error()) { <p class="message error-message" role="alert">{{ error() }}</p> }
+    @if (notice()) { <p class="message success-message" role="status">{{ notice() }}</p> }
+
+    @if (editorOpen()) {
+      <section class="editor" aria-labelledby="discount-form-title">
+        <div class="editor-heading">
+          <div><p class="eyebrow">{{ editingId() === null ? 'Nueva promoción' : 'Editar promoción' }}</p><h2 id="discount-form-title">Datos del código</h2></div>
+          <button type="button" class="quiet-button" (click)="cancelEditor()">Cancelar</button>
+        </div>
+        <form [formGroup]="form" (ngSubmit)="save()">
+          <div class="form-grid">
+            <label>Código
+              <input type="text" formControlName="code" maxlength="40" autocomplete="off" placeholder="VERANO15" />
+            </label>
+            <label>Descuento (%)
+              <input type="number" formControlName="discount_percent" min="0.01" max="100" step="0.01" />
+            </label>
+            <label>Importe mínimo de la reserva (€)
+              <input type="number" formControlName="minimum_amount" min="0" step="0.01" />
+            </label>
+            <label>Usos máximos <small>En blanco = ilimitados</small>
+              <input type="number" formControlName="max_uses" min="1" max="1000000" step="1" />
+            </label>
+            <label>Válido desde
+              <input type="date" formControlName="starts_on" />
+            </label>
+            <label>Válido hasta
+              <input type="date" formControlName="ends_on" />
+            </label>
+            <label class="active-field"><input type="checkbox" formControlName="is_active" /> Código activo</label>
+          </div>
+
+          <section class="excluded-editor" aria-labelledby="excluded-title">
+            <h3 id="excluded-title">Fechas en las que no se puede usar</h3>
+            <p>Aunque el código esté vigente, no se aceptará en estancias que coincidan con estos periodos.</p>
+            <div [formGroup]="rangeForm" class="range-form">
+              <label>Desde<input type="date" formControlName="start_date" /></label>
+              <label>Hasta (inclusive)<input type="date" formControlName="end_date" /></label>
+              <button type="button" class="secondary-button" (click)="addExcludedDate()">Añadir periodo</button>
+            </div>
+            @if (excludedDates().length) {
+              <ul class="excluded-list">
+                @for (range of excludedDates(); track $index) {
+                  <li>
+                    <span>{{ range.start_date | date: 'dd/MM/yyyy' : 'UTC' }} – {{ range.end_date | date: 'dd/MM/yyyy' : 'UTC' }}</span>
+                    <button type="button" class="text-button" (click)="removeExcludedDate($index)">Eliminar</button>
+                  </li>
+                }
+              </ul>
+            } @else { <p class="empty-note">No hay fechas excluidas.</p> }
+          </section>
+
+          <div class="form-actions">
+            <button type="submit" class="primary-button" [disabled]="saving()">{{ saving() ? 'Guardando…' : 'Guardar código' }}</button>
+          </div>
+        </form>
+      </section>
+    }
+
+    @if (loading()) {
+      <p class="empty-state" role="status">Cargando códigos…</p>
+    } @else if (codes().length === 0) {
+      <p class="empty-state">Todavía no hay códigos de descuento.</p>
+    } @else {
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Código</th><th>Descuento</th><th>Vigencia</th><th>Mínimo</th><th>Usos</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody>
+            @for (code of codes(); track code.id) {
+              <tr>
+                <td><strong>{{ code.code }}</strong><small>{{ code.excluded_dates.length }} periodo(s) excluido(s)</small></td>
+                <td>{{ code.discount_percent }}%</td>
+                <td>{{ code.starts_on ? (code.starts_on | date: 'dd/MM/yyyy' : 'UTC') : 'Sin inicio' }} – {{ code.ends_on ? (code.ends_on | date: 'dd/MM/yyyy' : 'UTC') : 'Sin fin' }}</td>
+                <td>{{ code.minimum_amount | currency: 'EUR' }}</td>
+                <td>{{ code.usage_count }} / {{ code.max_uses ?? '∞' }}</td>
+                <td><span class="status-badge" [class.inactive]="!code.is_active">{{ code.is_active ? 'Activo' : 'Desactivado' }}</span></td>
+                <td class="row-actions">
+                  <button type="button" class="text-button" (click)="openSendDialog(code)" [disabled]="!code.is_active">Enviar</button>
+                  <button type="button" class="text-button" (click)="startEdit(code)">Editar</button>
+                  <button type="button" class="text-button delete-link" (click)="delete(code)">Eliminar</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (sendingCode(); as code) {
+      <div class="modal-backdrop">
+        <section class="send-dialog" role="dialog" aria-modal="true" aria-labelledby="send-dialog-title">
+          <div class="editor-heading">
+            <div>
+              <p class="eyebrow">Envío individual</p>
+              <h2 id="send-dialog-title">Enviar {{ code.code }}</h2>
+            </div>
+            <button type="button" class="quiet-button" (click)="closeSendDialog()" [disabled]="sendingEmails()">Cerrar</button>
+          </div>
+          <p>El correo se enviará por separado a cada huésped que aceptó recibir comunicaciones comerciales.</p>
+          @if (sendNotice()) { <p class="message success-message" role="status">{{ sendNotice() }}</p> }
+          @if (sendError()) { <p class="message error-message" role="alert">{{ sendError() }}</p> }
+          @if (loadingRecipients()) {
+            <p class="empty-note" role="status">Cargando huéspedes...</p>
+          } @else if (recipients().length === 0) {
+            <p class="empty-note">No hay huéspedes con consentimiento de marketing registrado.</p>
+          } @else {
+            <div class="recipient-controls">
+              <span>{{ selectedRecipientEmails().length }} de {{ recipients().length }} seleccionados</span>
+              <div>
+                <button type="button" class="text-button" (click)="selectAllRecipients()">Seleccionar todos</button>
+                <button type="button" class="text-button" (click)="selectNoRecipients()">Ninguno</button>
+              </div>
+            </div>
+            <div class="recipient-list">
+              <div class="recipient-list-heading"><span aria-hidden="true"></span><span>Huésped</span><span>Fecha de entrada</span></div>
+              @for (recipient of recipients(); track recipient.email) {
+                <label class="recipient-row">
+                  <input
+                    type="checkbox"
+                    [checked]="selectedRecipientEmails().includes(recipient.email)"
+                    (change)="toggleRecipient(recipient.email, $event)" />
+                  <span><strong>{{ recipient.guest_name }}</strong><small>{{ recipient.email }}</small></span>
+                  <time [attr.datetime]="recipient.check_in">{{ recipient.check_in | date: 'dd/MM/yyyy' : 'UTC' }}</time>
+                </label>
+              }
+            </div>
+          }
+          <div class="form-actions">
+            <button type="button" class="quiet-button" (click)="closeSendDialog()" [disabled]="sendingEmails()">Cancelar</button>
+            <button type="button" class="primary-button" (click)="sendPromotion()" [disabled]="sendingEmails() || loadingRecipients() || recipients().length === 0">
+              {{ sendingEmails() ? 'Enviando...' : 'Enviar a los seleccionados' }}
+            </button>
+          </div>
+        </section>
+      </div>
+    }
+  </main>
+</div>

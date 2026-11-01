@@ -1,0 +1,20 @@
+{
+  "name": "hotel-amanecer-en-campos",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "setup": "npm install && npm install --prefix backend && npm install --prefix gateway && npm install --prefix frontend",
+    "db:up": "docker compose up -d --wait db",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait db",
+    "dev": "concurrently -n backend,gateway,frontend -c blue,magenta,green \"npm run dev --prefix backend\" \"npm run dev --prefix gateway\" \"node --env-file=.env scripts/dev-frontend.mjs\"",
+    "check": "node scripts/check-versions.mjs",
+    "check:update": "node scripts/check-versions.mjs --update"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  }
+}

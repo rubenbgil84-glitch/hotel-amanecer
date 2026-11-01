@@ -1,0 +1,269 @@
+<div class="admin-page">
+  <header class="admin-header">
+    <div class="wrap admin-header-inner">
+      <a class="admin-brand" routerLink="/carmen-admin/dashboard">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Hotel Amanecer <small>Administración</small></span>
+      </a>
+      <a class="back-link" routerLink="/carmen-admin/dashboard">Volver al panel</a>
+    </div>
+  </header>
+
+  <main class="wrap bookings-content">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">Gestión de huéspedes</p>
+        <h1>Reservas</h1>
+        <p>Consulta, actualiza y gestiona las reservas y su pre-check-in.</p>
+      </div>
+      <span class="booking-count">{{ bookings().length }} reservas</span>
+    </div>
+
+    @if (error()) {
+      <p class="message error-message" role="alert">{{ error() }}</p>
+    }
+    @if (notice()) {
+      <p class="message success-message" role="status">{{ notice() }}</p>
+    }
+
+    <form class="filters" [formGroup]="filters" (ngSubmit)="loadBookings()">
+      <label>
+        Desde
+        <input type="date" formControlName="from_date" />
+      </label>
+      <label>
+        Hasta
+        <input type="date" formControlName="to_date" />
+      </label>
+      <label>
+        Pre-check-in
+        <select formControlName="precheck">
+          <option value="all">Todos</option>
+          <option value="completed">Realizado</option>
+          <option value="pending">Pendiente</option>
+        </select>
+      </label>
+      <label class="search-field">
+        Buscar
+        <input type="search" formControlName="search" placeholder="Nombre, DNI, teléfono, PIN o código" />
+      </label>
+      <div class="filter-actions">
+        <button class="primary-button" type="submit">Filtrar</button>
+        <button class="quiet-button" type="button" (click)="resetFilters()">Limpiar</button>
+      </div>
+    </form>
+
+    @if (loading()) {
+      <p class="empty-state" role="status">Cargando reservas…</p>
+    } @else if (bookings().length === 0) {
+      <p class="empty-state">No hay reservas que coincidan con los filtros.</p>
+    } @else {
+      <div class="table-scroll">
+        <table class="booking-table">
+          <thead>
+            <tr>
+              <th>Huésped</th>
+              <th>Contacto y documento</th>
+              <th>Entrada / salida</th>
+              <th>Personas</th>
+              <th>Servicios</th>
+              <th>Código</th>
+              <th>Pre-check-in</th>
+              <th>PIN</th>
+              <th><span class="visually-hidden">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (booking of bookings(); track booking.id) {
+              <tr>
+                <td>
+                  <strong>{{ booking.guest_name }}</strong>
+                  <small>{{ booking.room_name }}</small>
+                </td>
+                <td>
+                  <a [href]="'mailto:' + booking.email">{{ booking.email }}</a>
+                  <small>{{ booking.identity_document || 'DNI no indicado' }}</small>
+                  <small>{{ booking.phone || 'Teléfono no indicado' }}</small>
+                </td>
+                <td class="dates-cell">
+                  <span>{{ booking.check_in | date: 'dd/MM/yyyy' : 'UTC' }}</span>
+                  <small>hasta {{ booking.check_out | date: 'dd/MM/yyyy' : 'UTC' }}</small>
+                </td>
+                <td>{{ booking.adults }} adultos · {{ booking.children }} niños</td>
+                <td>
+                  <span>{{ booking.breakfast ? 'Desayuno' : 'Sin desayuno' }}</span>
+                  <small>{{ booking.pets ? 'Con mascotas' : 'Sin mascotas' }}</small>
+                </td>
+                <td><code>{{ booking.reservation_code }}</code></td>
+                <td>
+                  <span class="status" [class.status-done]="booking.precheckin_completed_at">
+                    {{ booking.precheckin_completed_at ? 'Realizado' : 'Pendiente' }}
+                  </span>
+                </td>
+                <td><code class="pin">{{ booking.arrival_pin }}</code></td>
+                <td>
+                  <div class="row-actions">
+                    <button class="icon-button" type="button" (click)="openDetails(booking)" [attr.aria-label]="'Ver reserva ' + booking.reservation_code" title="Ver reserva">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.2-6 9.5-6 9.5 6 9.5 6-3.2 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.7" /></svg>
+                    </button>
+                    <button class="icon-button" type="button" (click)="resend(booking)" [disabled]="actionId() !== null" [attr.aria-label]="'Reenviar reserva ' + booking.reservation_code" title="Reenviar reserva">↻</button>
+                    <button class="icon-button" type="button" (click)="startPrecheckin(booking)" [disabled]="!!booking.precheckin_completed_at || actionId() !== null" [attr.aria-label]="'Enviar enlace de pre-check-in para ' + booking.reservation_code" title="Hacer pre-checking">✓</button>
+                    <button class="icon-button" type="button" (click)="downloadPdf(booking)" [disabled]="actionId() !== null" [attr.aria-label]="'Descargar informe PDF de ' + booking.reservation_code" title="Descargar PDF">↓</button>
+                    <button class="icon-button" type="button" (click)="startEdit(booking)" [attr.aria-label]="'Editar reserva ' + booking.reservation_code" title="Editar reserva">✎</button>
+                    <button class="icon-button delete-icon" type="button" (click)="deleteBooking(booking)" [disabled]="actionId() !== null" [attr.aria-label]="'Eliminar reserva ' + booking.reservation_code" title="Eliminar reserva">×</button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </main>
+
+  @if (selectedBooking(); as booking) {
+    <div class="modal-backdrop" (click)="closeDetails()">
+      <section class="booking-modal" role="dialog" aria-modal="true" aria-labelledby="booking-detail-title" (click)="$event.stopPropagation()">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">Detalle de reserva</p>
+            <h2 id="booking-detail-title">{{ booking.reservation_code }}</h2>
+          </div>
+          <button class="quiet-button" type="button" (click)="closeDetails()">Cerrar</button>
+        </div>
+        <div class="detail-grid">
+          <section class="detail-card">
+            <h3>Estancia</h3>
+            <dl>
+              <dt>Habitación</dt><dd>{{ booking.room_name }}</dd>
+              <dt>Entrada</dt><dd>{{ booking.check_in | date: 'dd/MM/yyyy' : 'UTC' }}</dd>
+              <dt>Salida</dt><dd>{{ booking.check_out | date: 'dd/MM/yyyy' : 'UTC' }}</dd>
+              <dt>Huéspedes</dt><dd>{{ booking.adults }} adultos · {{ booking.children }} niños</dd>
+              <dt>Desayuno</dt><dd>{{ booking.breakfast ? 'Sí' : 'No' }}</dd>
+              <dt>Mascotas</dt><dd>{{ booking.pets ? 'Sí' : 'No' }}</dd>
+              <dt>PIN de llegada</dt><dd><code class="pin">{{ booking.arrival_pin }}</code></dd>
+              <dt>Estado pre-check-in</dt><dd>{{ booking.precheckin_completed_at ? 'Completado' : 'Pendiente' }}</dd>
+              <dt>Fecha de reserva</dt><dd>{{ booking.created_at | date: 'dd/MM/yyyy HH:mm' : 'UTC' }}</dd>
+            </dl>
+            <h4>Detalles de la habitación</h4>
+            <dl>
+              <dt>Descripción</dt><dd>{{ booking.room_description }}</dd>
+              <dt>Características</dt><dd>{{ booking.room_features.join(', ') || 'No indicadas' }}</dd>
+              <dt>Precio actual / noche</dt><dd>{{ booking.room_price_per_night | currency: 'EUR' }}</dd>
+            </dl>
+          </section>
+          <section class="detail-card">
+            <h3>Datos del huésped</h3>
+            <dl>
+              <dt>Nombre</dt><dd>{{ booking.guest_name }}</dd>
+              <dt>Email</dt><dd>{{ booking.email }}</dd>
+              <dt>DNI</dt><dd>{{ booking.identity_document || 'No indicado' }}</dd>
+              <dt>Teléfono</dt><dd>{{ booking.phone || 'No indicado' }}</dd>
+              <dt>Observaciones</dt><dd>{{ booking.notes || 'Ninguna' }}</dd>
+            </dl>
+          </section>
+          <section class="detail-card">
+            <h3>Desglose de precios</h3>
+            <dl>
+              <dt>Habitación</dt><dd>{{ booking.room_subtotal | currency: 'EUR' }}</dd>
+              <dt>Desayuno</dt><dd>{{ booking.breakfast_total | currency: 'EUR' }}</dd>
+              <dt>Mascotas</dt><dd>{{ booking.pets_total | currency: 'EUR' }}</dd>
+              @if (booking.discount_amount) {
+                <dt>Descuento{{ booking.discount_code ? ' · ' + booking.discount_code : '' }}</dt><dd>−{{ booking.discount_amount | currency: 'EUR' }}</dd>
+              }
+              @for (vat of booking.vat_breakdown ?? []; track vat.effective_from + vat.rate) {
+                <dt>Base imponible · IVA {{ vat.rate }}%</dt><dd>{{ vat.taxable_base | currency: 'EUR' }}</dd>
+                <dt>IVA incluido · {{ vat.rate }}%</dt><dd>{{ vat.vat | currency: 'EUR' }}</dd>
+              }
+              <dt class="total-label">Total</dt><dd class="total-value">{{ booking.total | currency: 'EUR' }}</dd>
+            </dl>
+          </section>
+          @if (booking.precheckin_completed_at) {
+            <section class="detail-card detail-card--wide">
+              <h3>Pre-check-in · identidad y contacto</h3>
+              <dl>
+                <dt>Nombre completo</dt><dd>{{ booking.first_name }} {{ booking.first_surname }} {{ booking.second_surname }}</dd>
+                <dt>DNI indicado</dt><dd>{{ booking.precheckin_identity_document }}</dd>
+                <dt>Documento</dt><dd>{{ booking.document_type }} · {{ booking.document_support_number }}</dd>
+                <dt>Nacimiento</dt><dd>{{ booking.birth_date | date: 'dd/MM/yyyy' : 'UTC' }}</dd>
+                <dt>Sexo / nacionalidad</dt><dd>{{ booking.sex }} · {{ booking.nationality }}</dd>
+                <dt>Dirección</dt><dd>{{ booking.home_address }}, {{ booking.home_city }}, {{ booking.home_country }}</dd>
+                <dt>Expedición / caducidad</dt><dd>{{ booking.document_issue_date | date: 'dd/MM/yyyy' : 'UTC' }} · {{ booking.document_expiry_date | date: 'dd/MM/yyyy' : 'UTC' }}</dd>
+                <dt>Teléfono móvil</dt><dd>{{ booking.phone_mobile }}</dd>
+                <dt>Email pre-check-in</dt><dd>{{ booking.precheckin_email }}</dd>
+                <dt>Viajeros</dt><dd>{{ booking.traveler_count }}</dd>
+                <dt>Relación con menores</dt><dd>{{ booking.minor_relationships || 'No indicado' }}</dd>
+                <dt>Hora de llegada / salida</dt><dd>{{ booking.arrival_time || 'No indicada' }} / {{ booking.departure_time || 'No indicada' }}</dd>
+                <dt>Cama preferida</dt><dd>{{ booking.preferred_bed || 'No indicada' }}</dd>
+                <dt>Firma</dt><dd>{{ booking.signature }}</dd>
+                <dt>Condiciones aceptadas</dt><dd>{{ booking.terms_accepted_at | date: 'dd/MM/yyyy HH:mm' : 'UTC' }}</dd>
+                <dt>Consentimiento comercial</dt><dd>{{ booking.marketing_consent ? 'Sí' : 'No' }}</dd>
+              </dl>
+            </section>
+          }
+        </div>
+        @if (booking.precheckin_completed_at && (booking.document_front_path || booking.document_back_path)) {
+          <section class="document-images">
+            <h3>Documentación de identidad</h3>
+            @if (booking.document_front_path) {
+              <figure><img [src]="documentUrl(booking, 'front')" alt="Anverso del documento de identidad" /><figcaption>Anverso</figcaption></figure>
+            }
+            @if (booking.document_back_path) {
+              <figure><img [src]="documentUrl(booking, 'back')" alt="Reverso del documento de identidad" /><figcaption>Reverso</figcaption></figure>
+            }
+          </section>
+        }
+        <div class="modal-actions">
+          <button class="secondary-button" type="button" (click)="downloadPdf(booking)">Descargar PDF</button>
+          <button class="secondary-button" type="button" (click)="startEdit(booking)">Editar reserva</button>
+        </div>
+      </section>
+    </div>
+  }
+
+  @if (editingBooking(); as booking) {
+    <div class="modal-backdrop">
+      <section class="booking-modal edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-booking-title">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">Editar reserva · {{ booking.reservation_code }}</p>
+            <h2 id="edit-booking-title">Modificar datos</h2>
+          </div>
+          <button class="quiet-button" type="button" (click)="cancelEdit()">Cancelar</button>
+        </div>
+        @if (booking.precheckin_completed_at) {
+          <p class="message warning-message">Al guardar se eliminarán el pre-check-in completado y las imágenes de los documentos. Se enviará un nuevo correo a la dirección indicada.</p>
+        }
+        <form [formGroup]="bookingForm" (ngSubmit)="saveBooking()">
+          <div class="edit-grid">
+            <label>Nombre completo<input type="text" formControlName="guest_name" /></label>
+            <label>Email<input type="email" formControlName="email" /></label>
+            <label>DNI / documento<input type="text" formControlName="identity_document" /></label>
+            <label>Teléfono<input type="tel" formControlName="phone" /></label>
+            <label>Habitación
+              <select formControlName="room_id">
+                @for (room of rooms(); track room.id) {
+                  <option [ngValue]="room.id">{{ room.name }}{{ room.is_active ? '' : ' (inactiva)' }}</option>
+                }
+              </select>
+            </label>
+            <label>Entrada<input type="date" formControlName="check_in" /></label>
+            <label>Salida<input type="date" formControlName="check_out" /></label>
+            <label>Adultos<input type="number" formControlName="adults" min="1" max="13" /></label>
+            <label>Niños<input type="number" formControlName="children" min="0" max="12" /></label>
+            <label class="check-option"><input type="checkbox" formControlName="breakfast" /> Desayuno</label>
+            <label class="check-option"><input type="checkbox" formControlName="pets" /> Viaja con mascotas</label>
+            <label class="notes-field">Observaciones<textarea formControlName="notes" rows="3"></textarea></label>
+          </div>
+          @if (error()) {
+            <p class="message error-message" role="alert">{{ error() }}</p>
+          }
+          <div class="modal-actions">
+            <button class="quiet-button" type="button" (click)="cancelEdit()">Cancelar</button>
+            <button class="primary-button" type="submit" [disabled]="saving()">{{ saving() ? 'Guardando…' : 'Guardar y reenviar correo' }}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+</div>

@@ -1,0 +1,59 @@
+<section class="rooms-hero">
+  <div class="wrap rooms-hero-inner">
+    @if (isRuralPage) {
+      <p class="eyebrow">Una estancia para compartir</p>
+      <h1>Casa rural</h1>
+      <p>Descubre una estancia independiente para disfrutar con familia y amigos.</p>
+    } @else {
+      <p class="eyebrow">Espacios para sentirte bien</p>
+      <h1>Tu habitación, tu manera de viajar.</h1>
+      <p>Descubre espacios pensados para descansar, compartir y disfrutar cada momento de tu estancia.</p>
+    }
+  </div>
+</section>
+<section class="section wrap rooms-list" aria-labelledby="rooms-list-title">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">{{ isRuralPage ? 'Una estancia para compartir' : 'Elige tu espacio' }}</p>
+      <h2 id="rooms-list-title">{{ isRuralPage ? 'Nuestra casa rural' : selectedCategory() || 'Nuestras habitaciones' }}</h2>
+    </div>
+    <p class="muted">Precios por noche</p>
+  </div>
+  @if (selectedCategory() && !isRuralPage) {
+    <p class="category-filter">Mostrando la categoría {{ selectedCategory() }}. <a routerLink="/habitaciones" (click)="clearCategoryFilter()">Ver todas las habitaciones</a></p>
+  }
+  @if (rooms() === undefined) {
+    <p class="muted" role="status">Cargando habitaciones…</p>
+  } @else if (rooms() === null) {
+    <p class="muted" role="alert">No se pudieron cargar las habitaciones. Comprueba que la base de datos y el backend estén en marcha.</p>
+  } @else {
+    @if (hotelRooms().length) {
+      <div class="rooms">
+        @for (r of hotelRooms(); track r.id; let i = $index) {
+          <app-room-card [room]="r" [index]="i" />
+        }
+      </div>
+    } @else if (selectedCategory() && !isRuralPage) {
+      <p class="muted">No hay habitaciones activas en esta categoría.</p>
+    }
+    @if (ruralHouses().length && !isRuralPage) {
+      <section class="rural-houses" aria-labelledby="rural-houses-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Una estancia para compartir</p>
+            <h2 id="rural-houses-title">Casa rural</h2>
+          </div>
+          <p class="muted">Hasta 13 personas · precio fijo por noche</p>
+        </div>
+        <div class="rooms">
+          @for (house of ruralHouses(); track house.id; let i = $index) {
+            <app-room-card [room]="house" [index]="i" />
+          }
+        </div>
+      </section>
+    }
+    @if (isRuralPage && !ruralHouses().length) {
+      <p class="muted">La casa rural no está disponible actualmente.</p>
+    }
+  }
+</section>

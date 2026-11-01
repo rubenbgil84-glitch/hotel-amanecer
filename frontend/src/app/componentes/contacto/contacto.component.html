@@ -1,0 +1,147 @@
+<section class="contact-hero" aria-labelledby="contact-title">
+  <div class="wrap">
+    <p class="eyebrow">Estamos aquí para ayudarte</p>
+    <h1 id="contact-title">Hablemos de tu próxima visita.</h1>
+    <p>Cuéntanos qué necesitas y te responderemos en la mayor brevedad posible.</p>
+  </div>
+</section>
+
+<section class="contact-layout wrap" aria-label="Formulario y datos de contacto">
+    <section class="contact-map" aria-labelledby="contact-map-title">
+    <div class="map-heading">
+      <div>
+        <p class="eyebrow">Cómo llegar</p>
+        <h2 id="contact-map-title">Te esperamos.</h2>
+      </div>
+      <a [href]="directionsUrl()" target="_blank" rel="noopener noreferrer">Abrir indicaciones <span aria-hidden="true">↗</span></a>
+    </div>
+    <iframe
+      [title]="'Mapa de ' + siteContent.settings().site_name + ', ' + siteContent.settings().site_address"
+      [src]="mapEmbedUrl()"
+      width="100%"
+      height="420"
+      loading="lazy"
+      referrerpolicy="no-referrer">
+    </iframe>
+  </section>
+  <aside class="contact-info">
+    <p class="eyebrow">Contacto</p>
+    <h2>¿En qué podemos ayudarte?</h2>
+    <p>Escríbenos para consultar disponibilidad, servicios, actividades o cualquier detalle de tu estancia.</p>
+
+    <div class="contact-detail">
+      <span class="detail-icon" aria-hidden="true">T</span>
+      <div>
+        <h3>Llámanos</h3>
+        <a [href]="phoneHref()">{{ siteContent.settings().site_phone }}</a>
+        @if (siteContent.settings().site_mobile_phone) {
+          <p><a [href]="mobilePhoneHref()">{{ siteContent.settings().site_mobile_phone }}</a></p>
+        }
+      </div>
+    </div>
+
+    @if (siteContent.settings().site_email) {
+      <div class="contact-detail">
+        <span class="detail-icon" aria-hidden="true">@</span>
+        <div>
+          <h3>Email</h3>
+          <a [href]="emailHref()">{{ siteContent.settings().site_email }}</a>
+        </div>
+      </div>
+    }
+
+    <div class="contact-detail">
+      <span class="detail-icon" aria-hidden="true">⌖</span>
+      <div>
+        <h3>Visítanos</h3>
+        <p>{{ siteContent.settings().site_address }}</p>
+        <a [href]="directionsUrl()" target="_blank" rel="noopener noreferrer">Cómo llegar <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+
+    <div class="contact-note">
+      <p class="eyebrow">A tu ritmo</p>
+      <p>Si estás recorriendo el Camino de Santiago o planeando una escapada por Palencia, estaremos encantados de ayudarte.</p>
+    </div>
+  </aside>
+
+  <div class="contact-form-panel">
+    @if (sent()) {
+      <div class="success-message" role="status">
+        <span class="success-mark" aria-hidden="true">✓</span>
+        <p class="eyebrow">Mensaje recibido</p>
+        <h2>Gracias por escribirnos.</h2>
+        <p>Hemos recibido tu solicitud y en la mayor brevedad posible nos pondremos en contacto contigo.</p>
+        <button type="button" class="submit-button" (click)="sent.set(false)">Enviar otro mensaje</button>
+      </div>
+    } @else {
+      <div class="form-heading">
+        <p class="eyebrow">Formulario de contacto</p>
+        <h2>Déjanos tu mensaje</h2>
+        <p>Los campos marcados con <span aria-hidden="true">*</span> son obligatorios.</p>
+      </div>
+
+      @if (errors().length > 0) {
+        <div class="form-errors" role="alert">
+          @for (error of errors(); track error) {
+            <p>{{ error }}</p>
+          }
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <div class="field-grid">
+          <label>
+            Nombre <span aria-hidden="true">*</span>
+            <input type="text" formControlName="name" autocomplete="name" maxlength="100" />
+            @if (form.controls.name.touched && form.controls.name.invalid) {
+              <small>Escribe tu nombre (mínimo 2 caracteres).</small>
+            }
+          </label>
+          <label>
+            Correo electrónico <span aria-hidden="true">*</span>
+            <input type="email" formControlName="email" autocomplete="email" maxlength="254" />
+            @if (form.controls.email.touched && form.controls.email.invalid) {
+              <small>Escribe un correo electrónico válido.</small>
+            }
+          </label>
+          <label>
+            Teléfono
+            <input type="tel" formControlName="phone" autocomplete="tel" maxlength="40" />
+          </label>
+          <label>
+            Asunto <span aria-hidden="true">*</span>
+            <input type="text" formControlName="subject" maxlength="120" />
+            @if (form.controls.subject.touched && form.controls.subject.invalid) {
+              <small>Escribe un asunto de al menos 3 caracteres.</small>
+            }
+          </label>
+          <label class="field-wide">
+            Mensaje <span aria-hidden="true">*</span>
+            <textarea formControlName="message" rows="6" maxlength="5000"></textarea>
+            @if (form.controls.message.touched && form.controls.message.invalid) {
+              <small>El mensaje debe tener al menos 10 caracteres.</small>
+            }
+          </label>
+        </div>
+
+        <label class="privacy-check">
+          <input type="checkbox" formControlName="privacy_accepted" />
+          <span>Acepto que mis datos de contacto y mensaje se utilicen para responder a esta solicitud. <span aria-hidden="true">*</span></span>
+        </label>
+        @if (form.controls.privacy_accepted.touched && form.controls.privacy_accepted.invalid) {
+          <small class="privacy-error">Debes aceptar el uso de los datos para responder a tu solicitud.</small>
+        }
+
+        <button class="submit-button" type="submit" [disabled]="sending()">
+          {{ sending() ? 'Enviando…' : 'Enviar mensaje' }}
+          @if (!sending()) {
+            <span aria-hidden="true">→</span>
+          }
+        </button>
+      </form>
+    }
+  </div>
+
+
+</section>

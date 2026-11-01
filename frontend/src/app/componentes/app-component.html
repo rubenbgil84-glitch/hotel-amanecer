@@ -1,0 +1,134 @@
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+<div class="topbar">
+  <div class="wrap topbar-in">
+    <p>{{ siteContent.settings().hero_eyebrow }}</p>
+    <div class="topbar-contact">
+      <a [href]="phoneHref()">{{ siteContent.settings().site_phone }}</a>
+      <div class="social-links social-links--top" role="group" aria-label="Redes sociales">
+        @for (social of socialLinks(); track social.id) {
+          <a [href]="social.url" target="_blank" rel="noopener noreferrer" [attr.aria-label]="siteContent.settings().site_name + ' en ' + social.name">
+            <span aria-hidden="true">{{ socialBadge(social.id) }}</span>
+          </a>
+        }
+      </div>
+    </div>
+  </div>
+</div>
+
+<header class="header">
+  <div class="wrap header-in">
+    <a routerLink="/" class="brand" [attr.aria-label]="siteContent.settings().site_name + ', inicio'" (click)="closeMenu()">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <span class="brand-name">{{ siteContent.settings().site_name }}<small>{{ siteContent.settings().brand_tagline }}</small></span>
+    </a>
+    <button
+      type="button"
+      class="menu-toggle"
+      aria-controls="nav-primary"
+      [attr.aria-expanded]="menuOpen()"
+      [attr.aria-label]="menuOpen() ? 'Cerrar menú' : 'Abrir menú'"
+      (click)="toggleMenu()">
+      <span></span><span></span>
+    </button>
+    <nav id="nav-primary" class="primary-nav" [class.is-open]="menuOpen()" aria-label="Principal">
+      <a routerLink="/" routerLinkActive="on" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMenu()">Inicio</a>
+      <a routerLink="/habitaciones" routerLinkActive="on" (click)="showAllRooms(); closeMenu()">Habitaciones</a>
+      @if (hasActiveRuralHouse()) {
+        <a routerLink="/casa-rural" routerLinkActive="on" (click)="closeMenu()">Casa rural</a>
+      }
+      <a routerLink="/conocenos" routerLinkActive="on" (click)="closeMenu()">El hotel</a>
+      <a routerLink="/contacto" routerLinkActive="on" (click)="closeMenu()">Contacto</a>
+      <a routerLink="/" fragment="buscar" class="nav-cta" (click)="closeMenu()">Reservar</a>
+    </nav>
+  </div>
+</header>
+
+<main id="contenido"><router-outlet /></main>
+
+<footer class="footer">
+  <div class="wrap footer-in">
+    <section class="footer-hotel">
+      <a routerLink="/" class="footer-brand">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>{{ siteContent.settings().site_name }}<small>{{ siteContent.settings().brand_tagline }}</small></span>
+      </a>
+      <p>{{ siteContent.settings().footer_tagline }}</p>
+    </section>
+    <section class="footer-links">
+      <h2>Mapa del sitio</h2>
+      <a routerLink="/">Inicio</a>
+      <a routerLink="/conocenos">Conócenos</a>
+      <a routerLink="/habitaciones" (click)="showAllRooms()">Habitaciones</a>
+      @if (hasActiveRuralHouse()) {
+        <a routerLink="/casa-rural">Casa rural</a>
+      }
+      <a routerLink="/contacto">Contacto</a>
+      <a routerLink="/" fragment="buscar">Reservar</a>
+    </section>
+    <section class="footer-links">
+      <h2>Habitaciones</h2>
+      @for (room of roomTypes(); track room.name) {
+        <a routerLink="/habitaciones" (click)="selectRoomCategory(room.name)">{{ room.name }} ({{ room.count }})</a>
+      }
+      @if (hasActiveRuralHouse()) {
+        <a routerLink="/casa-rural">Casa rural</a>
+      }
+      <a routerLink="/habitaciones" (click)="showAllRooms()">Ver todas las habitaciones</a>
+    </section>
+    <section class="footer-contact">
+      <h2>Contacto</h2>
+      <p>{{ siteContent.settings().site_address }}</p>
+      <p>{{ receptionSchedule() }}</p>
+      <p><a [href]="phoneHref()">{{ siteContent.settings().site_phone }}</a></p>
+      @if (siteContent.settings().site_mobile_phone) {
+        <p><a [href]="mobilePhoneHref()">{{ siteContent.settings().site_mobile_phone }}</a></p>
+      }
+      @if (siteContent.settings().site_email) {
+        <p><a [href]="emailHref()">{{ siteContent.settings().site_email }}</a></p>
+      }
+      <p><a routerLink="/contacto">Escríbenos mediante el formulario</a></p>
+      <div class="social-links social-links--footer" role="group" aria-label="Redes sociales">
+        @for (social of socialLinks(); track social.id) {
+          <a [href]="social.url" target="_blank" rel="noopener noreferrer" [attr.aria-label]="siteContent.settings().site_name + ' en ' + social.name">
+            <span aria-hidden="true">{{ socialBadge(social.id) }}</span>
+          </a>
+        }
+      </div>
+    </section>
+  </div>
+  <div class="wrap footer-meta">
+    <span>© {{ year }} {{ siteContent.settings().site_name }}. Todos los derechos reservados.</span>
+    @if (hotelStars().length) {
+      <span class="hotel-stars" [attr.aria-label]="hotelStars().length + ' estrellas del hotel'">
+        @for (star of hotelStars(); track star) { <span aria-hidden="true">★</span> }
+      </span>
+    }
+  </div>
+  <nav class="wrap footer-policies" aria-label="Información legal">
+    <a routerLink="/politica-privacidad">{{ siteContent.settings().privacy_policy_title }}</a>
+    <a routerLink="/aviso-legal">{{ siteContent.settings().legal_notice_title }}</a>
+    <a routerLink="/politica-cookies">{{ siteContent.settings().cookies_policy_title }}</a>
+    <button type="button" class="cookie-settings-link" (click)="reopenCookiePreferences()">Configurar cookies</button>
+  </nav>
+</footer>
+
+@if (showCookieBanner()) {
+  <aside class="cookie-consent" role="dialog" aria-labelledby="cookie-consent-title">
+    <div>
+      <h2 id="cookie-consent-title">Preferencias de cookies</h2>
+      <p>Usamos almacenamiento técnico necesario para que funcione el sitio y recordar esta elección. No activamos cookies de análisis o publicidad. Puedes cambiar tu preferencia cuando quieras desde el pie de página; la recordaremos durante 6 meses.</p>
+      <a routerLink="/politica-cookies">Leer la política de cookies</a>
+      @if (cookiePreferenceError()) {
+        <p class="cookie-consent-error" role="alert">{{ cookiePreferenceError() }}</p>
+      }
+    </div>
+    <div class="cookie-consent-actions">
+      <button type="button" class="cookie-reject" (click)="chooseCookiePreference('rejected')">Rechazar opcionales</button>
+      <button type="button" class="cookie-accept" (click)="chooseCookiePreference('accepted')">Aceptar</button>
+      @if (cookiePreferenceError()) {
+        <button type="button" class="cookie-reject" (click)="continueWithoutSavingCookiePreference()">Continuar sin guardar</button>
+      }
+    </div>
+  </aside>
+}

@@ -1,0 +1,170 @@
+.reservation-page {
+  min-height: 60vh;
+  padding: 3rem 1rem;
+  background: #f3f4ef;
+}
+
+.reservation-card {
+  width: min(100%, 680px);
+  margin: 0 auto;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  background: #fff;
+  border: 1px solid #e3e5dc;
+  color: #242820;
+}
+
+.eyebrow {
+  margin: 0 0 .5rem;
+  color: #6b7168;
+  font-size: .75rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.6rem, 4vw, 2rem);
+}
+
+.reference {
+  margin: 1rem 0 1.5rem;
+  color: #50564e;
+}
+
+.confidential-note {
+  margin: 0 0 1.5rem;
+  padding: .8rem 1rem;
+  border-left: 3px solid #b58435;
+  background: #f8f4eb;
+  color: #50564e;
+  font-size: .9rem;
+}
+
+.details-section {
+  margin-top: 1.75rem;
+
+  h2 {
+    margin: 0 0 .75rem;
+    font-size: 1.15rem;
+  }
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid #e7e8e2;
+
+  > div {
+    display: grid;
+    gap: .4rem;
+    padding: 1rem;
+    border-bottom: 1px solid #e7e8e2;
+    min-width: 0;
+  }
+
+  strong {
+    overflow-wrap: anywhere;
+  }
+
+  span {
+    color: #6b7168;
+    font-size: .8rem;
+  }
+
+  .full-width {
+    grid-column: 1 / -1;
+  }
+}
+
+.room-summary {
+  padding: 1rem;
+  border: 1px solid #e7e8e2;
+
+  .room-image {
+    display: block;
+    width: 100%;
+    max-height: 22rem;
+    margin-bottom: 1rem;
+    object-fit: cover;
+  }
+
+  h3,
+  p {
+    margin: 0;
+  }
+
+  p {
+    margin-top: .6rem;
+    color: #50564e;
+    line-height: 1.5;
+  }
+
+  ul {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.5rem;
+    margin: .75rem 0 0;
+    padding-left: 1.2rem;
+  }
+}
+
+.precheckin-panel {
+  display: grid;
+  justify-items: center;
+  gap: .75rem;
+  margin-top: 2rem;
+  padding: 1.25rem;
+  background: #f3f4ef;
+  text-align: center;
+
+  p {
+    margin: 0;
+  }
+
+  button,
+  .precheckin-button {
+    display: inline-block;
+    padding: .8rem 1.25rem;
+    border: 0;
+    border-radius: 2px;
+    background: #244536;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  button:disabled {
+    background: #8a8e87;
+    cursor: not-allowed;
+  }
+}
+
+.precheckin-status {
+  font-weight: 700;
+}
+
+.availability-dates {
+  color: #50564e;
+}
+
+.address {
+  margin: 1.5rem 0;
+  color: #50564e;
+  line-height: 1.6;
+}
+
+.home-link,
+a {
+  color: #244536;
+}
+
+.status-message {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .details-grid > div {
+    padding: .8rem;
+  }
+}

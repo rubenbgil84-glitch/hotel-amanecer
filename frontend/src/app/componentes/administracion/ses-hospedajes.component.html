@@ -1,0 +1,259 @@
+<div class="admin-page">
+  <header class="admin-header">
+    <div class="wrap admin-header-inner">
+      <a class="admin-brand" routerLink="/carmen-admin/dashboard">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Hotel Amanecer <small>Administración</small></span>
+      </a>
+      <a class="back-link" routerLink="/carmen-admin/dashboard">Volver al panel</a>
+    </div>
+  </header>
+
+  <main class="wrap content">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">Comunicación de viajeros</p>
+        <h1>SES.Hospedajes</h1>
+        <p>Prepara y descarga el XML oficial de cada reserva.</p>
+      </div>
+      <span class="booking-count">{{ bookings().length }} reservas</span>
+    </div>
+
+    @if (error()) { <p class="message error-message" role="alert">{{ error() }}</p> }
+    @if (notice()) { <p class="message success-message" role="status">{{ notice() }}</p> }
+
+    <section class="settings-card" aria-labelledby="ses-settings-title">
+      <div>
+        <p class="eyebrow">Configuración del establecimiento</p>
+        <h2 id="ses-settings-title">Datos para el XML</h2>
+        <p>El código de establecimiento y la conexión a internet se incluirán en cada comunicación.</p>
+      </div>
+      <form class="settings-form" [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+        <label>
+          Código del establecimiento
+          <input type="text" formControlName="establishment_code" maxlength="100" autocomplete="off" />
+        </label>
+        <label>
+          Internet en el establecimiento
+          <select formControlName="internet_available">
+            <option value="unset">Confirma el dato</option>
+            <option value="true">Sí, dispone de internet</option>
+            <option value="false">No dispone de internet</option>
+          </select>
+        </label>
+        <button class="primary-button" type="submit" [disabled]="saving()">
+          {{ saving() ? 'Guardando…' : 'Guardar configuración' }}
+        </button>
+      </form>
+    </section>
+
+    <form class="filters" [formGroup]="filters" (ngSubmit)="loadBookings()">
+      <label>Desde <input type="date" formControlName="from_date" /></label>
+      <label>Hasta <input type="date" formControlName="to_date" /></label>
+      <label>
+        Pre-check-in
+        <select formControlName="precheck">
+          <option value="all">Todos</option>
+          <option value="completed">Realizado</option>
+          <option value="pending">Pendiente</option>
+        </select>
+      </label>
+      <label class="search-field">
+        Buscar
+        <input type="search" formControlName="search" placeholder="Nombre, DNI, teléfono, PIN o código" />
+      </label>
+      <div class="filter-actions">
+        <button class="primary-button" type="submit">Filtrar</button>
+        <button class="quiet-button" type="button" (click)="resetFilters()">Limpiar</button>
+      </div>
+    </form>
+
+    @if (loading()) {
+      <p class="empty-state" role="status">Cargando reservas…</p>
+    } @else if (bookings().length === 0) {
+      <p class="empty-state">No hay reservas que coincidan con los filtros.</p>
+    } @else {
+      <div class="table-scroll">
+        <table class="booking-table">
+          <thead>
+            <tr>
+              <th>Huésped / habitación</th>
+              <th>Entrada / salida</th>
+              <th>Viajeros</th>
+              <th>Código</th>
+              <th>Pre-check-in</th>
+              <th>Datos XML</th>
+              <th><span class="visually-hidden">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (booking of bookings(); track booking.id) {
+              <tr>
+                <td><strong>{{ booking.guest_name }}</strong><small>{{ booking.room_name }}</small></td>
+                <td>{{ booking.check_in | date: 'dd/MM/yyyy' : 'UTC' }}<small>hasta {{ booking.check_out | date: 'dd/MM/yyyy' : 'UTC' }}</small></td>
+                <td>{{ booking.adults }} adultos · {{ booking.children }} niños</td>
+                <td><code>{{ booking.reservation_code }}</code></td>
+                <td>
+                  <span class="status" [class.status-done]="booking.precheckin_completed_at">
+                    {{ booking.precheckin_completed_at ? 'Realizado' : 'Pendiente' }}
+                  </span>
+                </td>
+                <td>
+                  <span>{{ booking.payment_type ? 'Pago indicado' : 'Falta pago' }}</span>
+                  <small>{{ booking.primary_country_code ? 'Titular indicado' : 'Revisar datos del titular' }}</small>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button class="action-button" type="button" (click)="startEdit(booking)" [disabled]="actionId() !== null" title="Editar datos SES y reiniciar el pre-check-in si ya se completó">
+                      {{ actionId() === booking.id ? '…' : 'Editar' }}
+                    </button>
+                    <button class="action-button" type="button" (click)="generateXml(booking)" [disabled]="actionId() !== null" title="Generar XML para SES.Hospedajes">
+                      {{ actionId() === booking.id ? '…' : 'Generar XML' }}
+                    </button>
+                    <button class="action-button delete-button" type="button" (click)="deletePrecheckin(booking)" [disabled]="actionId() !== null" title="Eliminar datos de pre-check-in e imágenes">
+                      Eliminar
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    <p class="form-note">
+      La exportación se bloquea si faltan datos obligatorios del establecimiento, el pago o cualquiera de los viajeros.
+      La plantilla XML utilizada es la publicada por SES.Hospedajes.
+      <a href="https://www.seshospedajes.es/app/Plantilla_alojamientos.xml" target="_blank" rel="noopener noreferrer">Ver plantilla oficial</a>.
+    </p>
+  </main>
+
+  @if (editingBooking(); as booking) {
+    <div class="modal-backdrop" (click)="cancelEdit()">
+      <section class="editor-modal" role="dialog" aria-modal="true" aria-labelledby="ses-editor-title" (click)="$event.stopPropagation()">
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">Datos de comunicación</p>
+            <h2 id="ses-editor-title">{{ booking.reservation_code }}</h2>
+            <p>{{ booking.guest_name }} · {{ booking.adults + booking.children }} viajeros</p>
+          </div>
+          <button type="button" class="quiet-button" (click)="cancelEdit()">Cerrar</button>
+        </div>
+
+        <form [formGroup]="detailsForm" (ngSubmit)="saveDetails()">
+          <section class="editor-section">
+            <h3>Contrato y pago</h3>
+            <div class="form-grid">
+              <label>Tipo de pago
+                <select formControlName="payment_type">
+                  <option value="">Selecciona</option>
+                  <option value="EFECT">Efectivo (EFECT)</option>
+                  <option value="TARJT">Tarjeta (TARJT)</option>
+                  <option value="PLATF">Plataforma (PLATF)</option>
+                  <option value="TRANS">Transferencia (TRANS)</option>
+                  <option value="MOVIL">Pago móvil (MOVIL)</option>
+                  <option value="TREG">Tarjeta regalo (TREG)</option>
+                  <option value="OTRO">Otro (OTRO)</option>
+                  <option value="DESTI">Pago en destino (DESTI)</option>
+                </select>
+              </label>
+              <label>Fecha de pago <input type="date" formControlName="payment_date" /></label>
+              <label>Medio de pago <input type="text" formControlName="payment_medium" maxlength="300" /></label>
+              <label>Titular del pago <input type="text" formControlName="payment_holder" maxlength="300" /></label>
+              @if (detailsForm.controls.payment_type.value === 'TARJT') {
+                <label>Caducidad de tarjeta (MM/AAAA)
+                  <input type="text" formControlName="card_expiry" placeholder="12/2027" maxlength="7" />
+                </label>
+              }
+              <label>Hora de entrada <input type="time" formControlName="check_in_time" /></label>
+              <label>Hora de salida <input type="time" formControlName="check_out_time" /></label>
+            </div>
+            <p class="field-note">No introduzcas números completos de tarjeta. Para tarjeta solo se solicita su caducidad.</p>
+          </section>
+
+          <section class="editor-section">
+            <h3>Datos complementarios del titular</h3>
+            <p class="field-note">Nombre, documento y contacto se toman del pre-check-in. Completa los códigos oficiales de nacionalidad, país y municipio.</p>
+            <div class="form-grid">
+              <label>Tipo de documento
+                <select formControlName="primary_document_type">
+                  <option value="">Selecciona</option>
+                  <option value="NIF">NIF</option><option value="NIE">NIE</option>
+                  <option value="PAS">Pasaporte</option><option value="OTRO">Otro</option><option value="CIF">CIF</option>
+                </select>
+              </label>
+              <label>Nacionalidad ISO alfa-3 <input type="text" formControlName="primary_nationality_code" maxlength="3" placeholder="ESP" /></label>
+              <label>País de residencia ISO alfa-3 <input type="text" formControlName="primary_country_code" maxlength="3" placeholder="ESP" /></label>
+              <label>Código INE municipio (si reside en España) <input type="text" formControlName="primary_municipality_code" maxlength="5" placeholder="00000" /></label>
+              <label>Nombre del municipio (si reside fuera de España) <input type="text" formControlName="primary_municipality_name" maxlength="200" /></label>
+              <label>Código postal <input type="text" formControlName="primary_postal_code" maxlength="20" /></label>
+              <label class="field-wide">Dirección complementaria (opcional) <input type="text" formControlName="primary_address_complement" maxlength="300" /></label>
+            </div>
+          </section>
+
+          <section class="editor-section">
+            <div class="section-heading">
+              <div>
+                <h3>Resto de viajeros</h3>
+                <p>El titular del pre-check-in ya cuenta como un viajero; añade aquí a los demás.</p>
+              </div>
+              <button class="secondary-button" type="button" (click)="addTraveler()" [disabled]="additionalTravelers.length >= 9">Añadir viajero</button>
+            </div>
+            <div formArrayName="additional_travelers">
+              @for (traveler of additionalTravelers.controls; track $index; let index = $index) {
+                <fieldset class="traveler-card" [formGroup]="traveler">
+                  <legend>Viajero {{ index + 2 }}</legend>
+                  <div class="form-grid">
+                    <label>Nombre <input type="text" formControlName="first_name" /></label>
+                    <label>Primer apellido <input type="text" formControlName="first_surname" /></label>
+                    <label>Segundo apellido <input type="text" formControlName="second_surname" /></label>
+                    <label>Tipo de documento
+                      <select formControlName="document_type">
+                        <option value="NIF">NIF</option><option value="NIE">NIE</option>
+                        <option value="PAS">Pasaporte</option><option value="OTRO">Otro</option><option value="CIF">CIF</option>
+                      </select>
+                    </label>
+                    <label>Número de documento <input type="text" formControlName="document_number" /></label>
+                    <label>Número de soporte <input type="text" formControlName="document_support" /></label>
+                    <label>Fecha de nacimiento <input type="date" formControlName="birth_date" /></label>
+                    <label>Nacionalidad ISO alfa-3 <input type="text" formControlName="nationality_code" maxlength="3" placeholder="ESP" /></label>
+                    <label>Sexo
+                      <select formControlName="sex"><option value="">Selecciona</option><option value="H">H</option><option value="M">M</option><option value="O">O</option></select>
+                    </label>
+                    <label>País de residencia ISO alfa-3 <input type="text" formControlName="country_code" maxlength="3" placeholder="ESP" /></label>
+                    <label class="field-wide">Dirección <input type="text" formControlName="address" /></label>
+                    <label>Complemento de dirección <input type="text" formControlName="address_complement" /></label>
+                    <label>Código INE municipio (España) <input type="text" formControlName="municipality_code" maxlength="5" /></label>
+                    <label>Nombre del municipio (extranjero) <input type="text" formControlName="municipality_name" /></label>
+                    <label>Código postal <input type="text" formControlName="postal_code" /></label>
+                    <label>Teléfono <input type="tel" formControlName="phone" /></label>
+                    <label>Teléfono 2 <input type="tel" formControlName="phone2" /></label>
+                    <label>Correo electrónico <input type="email" formControlName="email" /></label>
+                    <label>Parentesco (si procede)
+                      <select formControlName="relationship">
+                        <option value="">No indicado</option>
+                        <option value="AB">AB</option><option value="BA">BA</option><option value="BN">BN</option>
+                        <option value="CY">CY</option><option value="CD">CD</option><option value="HR">HR</option>
+                        <option value="HJ">HJ</option><option value="PM">PM</option><option value="NI">NI</option>
+                        <option value="SB">SB</option><option value="SG">SG</option><option value="TI">TI</option>
+                        <option value="YN">YN</option><option value="TU">TU</option><option value="OT">OT</option>
+                      </select>
+                    </label>
+                  </div>
+                  <button class="quiet-button remove-traveler" type="button" (click)="removeTraveler(index)">Quitar viajero</button>
+                </fieldset>
+              }
+            </div>
+          </section>
+
+          <p class="field-note">El XML solo se genera cuando el pre-check-in está completo y hay datos válidos para cada persona, el pago y el establecimiento.</p>
+          <div class="modal-actions">
+            <button type="button" class="quiet-button" (click)="cancelEdit()">Cancelar</button>
+            <button type="submit" class="primary-button" [disabled]="saving()">{{ saving() ? 'Guardando…' : 'Guardar datos SES' }}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+</div>

@@ -1,0 +1,208 @@
+@if (result(); as booking) {
+  <div class="book-done" role="status">
+    <p class="eyebrow">Todo listo</p>
+    <h2>Reserva confirmada</h2>
+    <p>Referencia de reserva</p>
+    <strong class="booking-reference">{{ booking.reference }}</strong>
+    <p>PIN de llegada</p>
+    <strong class="booking-reference">{{ booking.pin }}</strong>
+    @if (successDetails(); as stay) {
+      <dl class="booking-details">
+        <div><dt>Habitación</dt><dd>{{ stay.roomName }}</dd></div>
+        <div><dt>Entrada</dt><dd>{{ stay.checkIn | date: 'longDate' }}</dd></div>
+        <div><dt>Salida</dt><dd>{{ stay.checkOut | date: 'longDate' }}</dd></div>
+        <div><dt>Viajeros</dt><dd>{{ stay.adults }} adultos · {{ stay.children }} niños</dd></div>
+        <div><dt>Duración</dt><dd>{{ booking.nights }} {{ booking.nights === 1 ? 'noche' : 'noches' }}</dd></div>
+        @if (stay.breakfast) {
+          <div><dt>Desayuno</dt><dd>{{ booking.breakfast_total | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
+        }
+        @if (stay.pets) {
+          <div><dt>Mascotas</dt><dd>{{ booking.pets_total | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
+        }
+        @if (booking.discount_amount) {
+          <div><dt>Descuento{{ booking.discount_code ? ' · ' + booking.discount_code : '' }}</dt><dd>−{{ booking.discount_amount | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
+        }
+        @for (vat of booking.vat_breakdown ?? []; track vat.effective_from + vat.rate) {
+          <div><dt>Base imponible · IVA {{ vat.rate }}%</dt><dd>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
+          <div><dt>IVA incluido · {{ vat.rate }}%</dt><dd>{{ vat.vat | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
+        }
+        <div class="booking-total"><dt>Total</dt><dd>{{ booking.total | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
+      </dl>
+    }
+    <p class="email-notice">Te hemos enviado por correo el enlace personal para completar el pre-check-in, disponible durante los tres días anteriores a la llegada.</p>
+    <div
+      class="countdown-track"
+      role="progressbar"
+      aria-label="Tiempo que se mostrará la confirmación"
+      aria-valuemin="0"
+      aria-valuemax="8"
+      [attr.aria-valuenow]="countdown()">
+      <span [style.width.%]="countdown() / 8 * 100"></span>
+    </div>
+    <p class="countdown-label">Este resumen se cerrará en {{ countdown() }} segundos.</p>
+    <button type="button" class="btn" (click)="reset()">Hacer otra reserva</button>
+  </div>
+} @else {
+  <div class="reservation-layout">
+    <aside class="room-summary" aria-labelledby="selected-room-title">
+      @if (selectedRoom(); as room) {
+        <div class="summary-image">
+          <img
+            [src]="room.image_url || '/api/web-images/hotel.png'"
+            [alt]="'Interior de ' + room.name"
+            decoding="async" />
+        </div>
+        <div class="summary-content">
+          <p class="eyebrow">Tu habitación</p>
+          <h2 id="selected-room-title">{{ room.name }}</h2>
+          <p class="room-description">{{ room.description }}</p>
+          <div class="room-tags" aria-label="Características">
+            <span class="room-tag">{{ room.capacity }} personas</span>
+            @for (feature of room.features; track feature) {
+              <span class="room-tag">{{ feature }}</span>
+            }
+          </div>
+          <p class="room-price">
+            @if (room.pricing_type === 'rural_house') {
+              {{ room.price_per_night | currency: 'EUR' : 'symbol' : '1.0-2' }}
+            } @else {
+              Desde {{ room.single_price | currency: 'EUR' : 'symbol' : '1.0-2' }}
+            }
+            <span>por noche</span>
+          </p>
+        </div>
+      } @else {
+        <div class="summary-content">
+          <p class="eyebrow">Tu habitación</p>
+          <h2 id="selected-room-title">Elige una habitación</h2>
+          <p>Selecciona una habitación y consulta su disponibilidad para continuar.</p>
+        </div>
+      }
+
+      <div class="price-summary" aria-live="polite">
+        <h3>Resumen del importe</h3>
+        <div><span>Alojamiento · {{ nights() }} noches</span><strong>{{ roomTotal() | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+        @if (selectedRoom()?.pricing_type === 'standard' && form.controls.adults.value + form.controls.children.value > 2) {
+          <p class="price-note">Incluye {{ form.controls.adults.value + form.controls.children.value - 2 }} cama(s) supletoria(s) a {{ selectedRoom()?.extra_bed_price | currency: 'EUR' : 'symbol' : '1.2-2' }} por noche.</p>
+        }
+        @if (breakfastTotal()) {
+          <div><span>Desayuno · {{ form.controls.adults.value + form.controls.children.value }} personas</span><strong>{{ breakfastTotal() | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+        }
+        @if (petsTotal()) {
+          <div><span>Suplemento mascotas</span><strong>{{ petsTotal() | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+        }
+        @if (currentDiscount(); as discount) {
+          <div class="discount-row"><span>Descuento · {{ discount.code }}</span><strong>−{{ discount.discount_amount | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+        } @else if (appliedDiscount()) {
+          <p class="price-note">Han cambiado los datos de la estancia. Vuelve a validar el código.</p>
+        }
+        @for (vat of estimatedVatBreakdown(); track vat.rate) {
+          <div><span>Base imponible · IVA {{ vat.rate }}%</span><strong>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+          <div><span>IVA incluido · {{ vat.rate }}%</span><strong>{{ vat.vat | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+        }
+        <div class="price-total"><span>Total estimado</span><strong>{{ estimatedTotal() | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+        <p>Importe orientativo; se confirmará al completar la reserva.</p>
+      </div>
+    </aside>
+
+    <form class="reservation-form" [formGroup]="form" (ngSubmit)="primaryAction()" novalidate>
+      <div class="form-heading">
+        <p class="eyebrow">Unos pasos más</p>
+        <h2>Completa tu reserva</h2>
+      </div>
+
+      <div class="form-grid">
+        <app-calendario-rango class="field-wide" formControlName="date_range" />
+
+        <label>Adultos
+          <select formControlName="adults">
+            @for (count of adultsOptions; track count) {
+              <option [ngValue]="count">{{ count }}</option>
+            }
+          </select>
+        </label>
+        <label>Niños
+          <select formControlName="children">
+            @for (count of childrenOptions; track count) {
+              <option [ngValue]="count">{{ count }}</option>
+            }
+          </select>
+        </label>
+        <label class="field-wide">Habitación
+          <select formControlName="room_id">
+            <option [ngValue]="0">Elige una habitación</option>
+            @for (room of roomOptions(); track room.id) {
+              <option [ngValue]="room.id" [disabled]="room.id === unavailableRoomId()">
+                {{ room.name }} · {{ (room.pricing_type === 'rural_house' ? room.price_per_night : room.single_price) | currency: 'EUR' : 'symbol' : '1.0-0' }}/noche
+                @if (room.id === unavailableRoomId()) { · No disponible }
+              </option>
+            }
+          </select>
+        </label>
+        <label>Desayuno
+          <select formControlName="breakfast">
+            <option value="">Elige</option>
+            <option value="yes">Sí</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <label>Mascotas
+          <select formControlName="pets">
+            <option value="">Elige</option>
+            <option value="yes">Sí</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <label>Nombre
+          <input type="text" formControlName="first_name" autocomplete="given-name" />
+        </label>
+        <label>Apellidos
+          <input type="text" formControlName="last_name" autocomplete="family-name" />
+        </label>
+        <label>DNI / NIF / NIE / Pasaporte
+          <input type="text" formControlName="identity_document" autocomplete="off" />
+        </label>
+        <label>Teléfono
+          <input type="tel" formControlName="phone" autocomplete="tel" />
+        </label>
+        <label class="field-wide">Correo electrónico
+          <input type="email" formControlName="email" autocomplete="email" />
+        </label>
+        <label class="field-wide">Observaciones
+          <textarea formControlName="notes" rows="3" maxlength="2000"></textarea>
+        </label>
+        <div class="field-wide discount-input">
+          <label for="discount-code">Código descuento (opcional)</label>
+          <div>
+            <input id="discount-code" type="text" [value]="discountCode()" (input)="discountCode.set($any($event.target).value)" maxlength="40" autocomplete="off" />
+            <button type="button" class="btn" (click)="applyDiscountCode()" [disabled]="validatingDiscount()">
+              {{ validatingDiscount() ? 'Validando…' : 'Aplicar código' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      @if (errors().length) {
+        <ul class="errors" role="alert">
+          @for (error of errors(); track error) { <li>{{ error }}</li> }
+        </ul>
+      }
+
+      <button
+        type="submit"
+        class="btn btn--full"
+        [disabled]="sending() || checkingAvailability()">
+        @if (checkingAvailability()) {
+          Consultando disponibilidad…
+        } @else if (sending()) {
+          Reservando…
+        } @else if (needsAvailabilityCheck()) {
+          Consultar disponibilidad
+        } @else {
+          Confirmar reserva
+        }
+        <span aria-hidden="true">→</span>
+      </button>
+    </form>
+  </div>
+}

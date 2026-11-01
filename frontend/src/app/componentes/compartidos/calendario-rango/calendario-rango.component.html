@@ -1,0 +1,65 @@
+<div class="date-range-control">
+  <span class="field-label">Entrada y salida</span>
+  <button
+    class="date-range-trigger"
+    type="button"
+    aria-haspopup="dialog"
+    [disabled]="disabled()"
+    [attr.aria-expanded]="calendarOpen()"
+    (click)="toggleCalendar()">
+    <span aria-hidden="true">▦</span>
+    {{ dateRangeLabel() }}
+  </button>
+  @if (calendarOpen()) {
+    <div class="calendar-popover" role="dialog" aria-label="Seleccionar fechas de estancia">
+      <div class="calendar-months">
+        @for (month of months(); track month.key; let monthIndex = $index) {
+          <section class="calendar-month" [attr.aria-label]="month.title">
+            <header class="calendar-heading">
+              @if (monthIndex === 0) {
+                <button
+                  class="calendar-nav"
+                  type="button"
+                  aria-label="Mes anterior"
+                  [disabled]="!canGoPrevious()"
+                  (click)="changeVisibleMonth(-1)">‹</button>
+              } @else {
+                <span class="calendar-nav-placeholder"></span>
+              }
+              <h2>{{ month.title }}</h2>
+              @if (monthIndex === 1) {
+                <button class="calendar-nav" type="button" aria-label="Mes siguiente" (click)="changeVisibleMonth(1)">›</button>
+              } @else {
+                <span class="calendar-nav-placeholder"></span>
+              }
+            </header>
+            <div class="calendar-grid calendar-weekdays" aria-hidden="true">
+              @for (weekday of weekDays; track weekday) {
+                <span>{{ weekday }}</span>
+              }
+            </div>
+            <div class="calendar-grid">
+              @for (day of month.days; track day.date) {
+                @if (day.currentMonth) {
+                  <button
+                    class="calendar-day"
+                    type="button"
+                    [disabled]="disabled() || day.disabled"
+                    [class.is-start]="day.start"
+                    [class.is-end]="day.end"
+                    [class.in-range]="day.inRange"
+                    [attr.aria-pressed]="day.start || day.end"
+                    [attr.aria-label]="day.date"
+                    (click)="selectDate(day)">{{ day.day }}</button>
+                } @else {
+                  <span class="calendar-day calendar-day--empty" aria-hidden="true"></span>
+                }
+              }
+            </div>
+          </section>
+        }
+      </div>
+      <p class="calendar-hint">Selecciona la entrada y después la salida.</p>
+    </div>
+  }
+</div>

@@ -1,0 +1,19 @@
+:host {
+  display: block;
+}
+
+.rural-houses {
+  margin-top: clamp(3rem, 7vw, 5rem);
+  padding-top: clamp(2rem, 5vw, 3.5rem);
+  border-top: 1px solid var(--line);
+}
+
+.category-filter {
+  margin: -1rem 0 1.5rem;
+  color: var(--muted);
+}
+
+.category-filter a {
+  color: var(--forest);
+  font-weight: 700;
+}

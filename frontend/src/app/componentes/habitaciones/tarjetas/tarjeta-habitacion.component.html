@@ -1,0 +1,26 @@
+<article class="room">
+  <div class="room-img">
+    <img [src]="room().image_url || fallbackImages[index() % fallbackImages.length]" [alt]="'Interior de ' + room().name" loading="lazy" decoding="async" />
+    <span class="room-capacity">{{ room().capacity }} personas</span>
+  </div>
+  <div class="room-body">
+    <p class="room-kicker">Habitación</p>
+    <h3>{{ room().name }}</h3>
+    <p>{{ room().description }}</p>
+    <ul>
+      @for (f of room().features; track $index) {
+        <li>{{ f }}</li>
+      }
+    </ul>
+    <p class="price">
+      @if (room().pricing_type === 'rural_house') {
+        <strong>{{ room().price_per_night | currency: 'EUR' : 'symbol' : '1.0-0' }}</strong>
+        <span>por noche · hasta 13 personas</span>
+      } @else {
+        <strong>Desde {{ room().single_price | currency: 'EUR' : 'symbol' : '1.0-0' }}</strong>
+        <span>por noche · individual · doble desde {{ room().double_price | currency: 'EUR' : 'symbol' : '1.0-0' }}</span>
+      }
+    </p>
+    <a class="room-link" routerLink="/reservar/" (click)="selectForBooking()">Reservar esta habitación <span aria-hidden="true">→</span></a>
+  </div>
+</article>

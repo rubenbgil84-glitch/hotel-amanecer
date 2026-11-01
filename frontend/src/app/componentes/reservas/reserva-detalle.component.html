@@ -1,0 +1,163 @@
+<main class="reservation-page">
+  <section class="reservation-card" aria-live="polite">
+    @if (status() === 'loading') {
+      <p class="status-message">Cargando los datos de tu reserva…</p>
+    } @else if (status() === 'invalid' || !booking()) {
+      <h1>No se ha encontrado la reserva</h1>
+      <p>El enlace no es válido o los datos ya no están disponibles.</p>
+      <a routerLink="/">Volver al inicio</a>
+    } @else {
+      <p class="eyebrow">{{ siteContent.settings().site_name }}</p>
+      <h1>Tu reserva está confirmada</h1>
+      <p class="reference">Referencia: <strong>{{ booking()!.reservation_code }}</strong></p>
+      <p class="reference">PIN de llegada: <strong>{{ booking()!.arrival_pin }}</strong></p>
+      <p class="confidential-note">Esta página contiene datos personales. No compartas el QR ni este enlace.</p>
+
+      <section class="details-section">
+        <h2>Datos de la reserva</h2>
+        <div class="details-grid">
+          <div><span>Nombre</span><strong>{{ booking()!.guest_name }}</strong></div>
+          <div><span>Documento de identidad</span><strong>{{ booking()!.identity_document }}</strong></div>
+          <div><span>Correo electrónico</span><strong>{{ booking()!.email }}</strong></div>
+          <div><span>Teléfono</span><strong>{{ booking()!.phone }}</strong></div>
+          <div><span>Reserva realizada</span><strong>{{ booking()!.created_at | date: 'dd/MM/yyyy HH:mm' }}</strong></div>
+          <div><span>Entrada</span><strong>{{ booking()!.check_in | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+          <div><span>Salida</span><strong>{{ booking()!.check_out | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+          <div>
+            <span>Huéspedes</span>
+            <strong>
+              {{ booking()!.adults }} {{ booking()!.adults === 1 ? 'adulto' : 'adultos' }}
+              @if (booking()!.children > 0) {
+                · {{ booking()!.children }} {{ booking()!.children === 1 ? 'niño' : 'niños' }}
+              }
+            </strong>
+          </div>
+          <div><span>Desayuno</span><strong>{{ booking()!.breakfast ? 'Incluido' : 'No incluido' }}</strong></div>
+          <div><span>Mascotas</span><strong>{{ booking()!.pets ? 'Sí' : 'No' }}</strong></div>
+          <div><span>Alojamiento</span><strong>{{ booking()!.room_subtotal | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+          @if (booking()!.breakfast_total) {
+            <div><span>Suplemento desayuno</span><strong>{{ booking()!.breakfast_total | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+          }
+          @if (booking()!.pets_total) {
+            <div><span>Suplemento mascotas</span><strong>{{ booking()!.pets_total | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+          }
+          @if (booking()!.discount_amount) {
+            <div><span>Descuento{{ booking()!.discount_code ? ' · ' + booking()!.discount_code : '' }}</span><strong>−{{ booking()!.discount_amount | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+          }
+          @for (vat of booking()!.vat_breakdown ?? []; track vat.effective_from + vat.rate) {
+            <div><span>Base imponible · IVA {{ vat.rate }}%</span><strong>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+            <div><span>IVA incluido · {{ vat.rate }}%</span><strong>{{ vat.vat | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+          }
+          <div><span>Total</span><strong>{{ booking()!.total | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+          @if (booking()!.notes) {
+            <div class="full-width"><span>Observaciones</span><strong>{{ booking()!.notes }}</strong></div>
+          }
+        </div>
+      </section>
+
+      <section class="details-section">
+        <h2>Habitación</h2>
+        <div class="room-summary">
+          @if (booking()!.room_image_url) {
+            <img class="room-image" [src]="booking()!.room_image_url" [alt]="'Imagen de ' + booking()!.room_name" />
+          }
+          <h3>{{ booking()!.room_name }}</h3>
+          <p>{{ booking()!.room_description }}</p>
+          <p>Capacidad: {{ booking()!.room_capacity }} {{ booking()!.room_capacity === 1 ? 'persona' : 'personas' }}</p>
+          @if (booking()!.room_features.length > 0) {
+            <ul>
+              @for (feature of booking()!.room_features; track $index) {
+                <li>{{ feature }}</li>
+              }
+            </ul>
+          }
+        </div>
+      </section>
+
+      @if (booking()!.precheckin_completed_at) {
+        <section class="details-section">
+          <h2>Datos del pre-check-in</h2>
+          <div class="details-grid">
+            @if (booking()!.first_name || booking()!.first_surname || booking()!.second_surname) {
+              <div><span>Nombre completo</span><strong>{{ booking()!.first_name }} {{ booking()!.first_surname }} {{ booking()!.second_surname }}</strong></div>
+            }
+            @if (booking()!.precheckin_identity_document) {
+              <div><span>Documento aportado</span><strong>{{ booking()!.precheckin_identity_document }}</strong></div>
+            }
+            @if (booking()!.document_type) {
+              <div><span>Tipo de documento</span><strong>{{ documentTypeLabel(booking()!.document_type) }}</strong></div>
+            }
+            @if (booking()!.document_support_number) {
+              <div><span>Número de soporte</span><strong>{{ booking()!.document_support_number }}</strong></div>
+            }
+            @if (booking()!.birth_date) {
+              <div><span>Fecha de nacimiento</span><strong>{{ booking()!.birth_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+            }
+            @if (booking()!.sex) {
+              <div><span>Sexo</span><strong>{{ sexLabel(booking()!.sex) }}</strong></div>
+            }
+            @if (booking()!.nationality) {
+              <div><span>Nacionalidad</span><strong>{{ booking()!.nationality }}</strong></div>
+            }
+            @if (booking()!.document_issue_date) {
+              <div><span>Expedición del documento</span><strong>{{ booking()!.document_issue_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+            }
+            @if (booking()!.document_expiry_date) {
+              <div><span>Caducidad del documento</span><strong>{{ booking()!.document_expiry_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+            }
+            @if (booking()!.home_address) {
+              <div class="full-width"><span>Dirección</span><strong>{{ booking()!.home_address }}</strong></div>
+            }
+            @if (booking()!.home_city || booking()!.home_country) {
+              <div><span>Localidad / país</span><strong>{{ booking()!.home_city }}{{ booking()!.home_city && booking()!.home_country ? ', ' : '' }}{{ booking()!.home_country }}</strong></div>
+            }
+            @if (booking()!.phone_mobile) {
+              <div><span>Móvil</span><strong>{{ booking()!.phone_mobile }}</strong></div>
+            }
+            @if (booking()!.phone_landline) {
+              <div><span>Teléfono fijo</span><strong>{{ booking()!.phone_landline }}</strong></div>
+            }
+            @if (booking()!.precheckin_email) {
+              <div><span>Correo de contacto</span><strong>{{ booking()!.precheckin_email }}</strong></div>
+            }
+            @if (booking()!.traveler_count !== null) {
+              <div><span>Número de viajeros</span><strong>{{ booking()!.traveler_count }}</strong></div>
+            }
+            @if (booking()!.minor_relationships) {
+              <div class="full-width"><span>Relación con los menores</span><strong>{{ booking()!.minor_relationships }}</strong></div>
+            }
+            @if (booking()!.arrival_time) {
+              <div><span>Hora prevista de llegada</span><strong>{{ booking()!.arrival_time }}</strong></div>
+            }
+            @if (booking()!.departure_time) {
+              <div><span>Hora prevista de salida</span><strong>{{ booking()!.departure_time }}</strong></div>
+            }
+            @if (booking()!.preferred_bed) {
+              <div><span>Preferencia de cama</span><strong>{{ preferredBedLabel(booking()!.preferred_bed) }}</strong></div>
+            }
+          </div>
+        </section>
+      }
+
+      <section class="precheckin-panel" aria-live="polite">
+        @if (booking()!.precheckin_completed_at) {
+          <p class="precheckin-status">Pre-check-in completado el {{ booking()!.precheckin_completed_at | date: 'dd/MM/yyyy HH:mm' }}</p>
+          <button type="button" disabled>Pre-check-in completado</button>
+        } @else if (booking()!.precheckin_available) {
+          <p class="precheckin-status">Puedes completar el pre-check-in ahora.</p>
+          <a class="precheckin-button" [routerLink]="['/pre-check-in']" [fragment]="token()">Pre-check-in disponible · Hacerlo</a>
+        } @else {
+          <p class="precheckin-status">Pre-check-in no disponible.</p>
+          <p class="availability-dates">
+            Disponible desde {{ booking()!.precheckin_available_from | date: 'dd/MM/yyyy' : 'UTC' }}
+            hasta {{ booking()!.precheckin_available_until | date: 'dd/MM/yyyy' : 'UTC' }}.
+          </p>
+          <button type="button" disabled>Pre-check-in no disponible</button>
+        }
+      </section>
+
+      <p class="address">{{ siteContent.settings().site_address }}</p>
+      <a class="home-link" routerLink="/">Volver al inicio</a>
+    }
+  </section>
+</main>

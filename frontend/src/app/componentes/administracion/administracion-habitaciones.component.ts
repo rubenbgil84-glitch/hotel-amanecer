@@ -1,0 +1,383 @@
+import { CurrencyPipe, DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, computed, inject, signal } from '@angular/core';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { AdminRoom, ApiService, RoomInput } from '../../api.service';
+
+@Component({
+  selector: 'app-admin-rooms',
+  standalone: true,
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink],
+  templateUrl: './administracion-habitaciones.component.html',
+  styleUrl: './administracion-habitaciones.component.scss',
+})
+export class AdministracionHabitaciones {
+  private readonly api = inject(ApiService);
+  private readonly fb = inject(NonNullableFormBuilder);
+
+  readonly rooms = signal<AdminRoom[] | null>(null);
+  readonly standardRooms = computed(() => (this.rooms() ?? []).filter((room) => room.pricing_type === 'standard'));
+  readonly ruralHouses = computed(() => (this.rooms() ?? []).filter((room) => room.pricing_type === 'rural_house'));
+  readonly loading = signal(true);
+  readonly saving = signal(false);
+  readonly error = signal('');
+  readonly notice = signal('');
+  readonly editingId = signal<number | null | 'new'>(null);
+  readonly imagePreview = signal<string | null>(null);
+  readonly editingBlockId = signal<number | null>(null);
+  readonly selectedRoomIds = signal<number[]>([]);
+  readonly selectedRoomCount = computed(() => this.selectedRoomIds().length);
+  private imageDataUrl: string | null = null;
+
+  readonly form = this.fb.group({
+    name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
+    description: ['', [Validators.required, Validators.minLength(10), Validators.maxLength(2000)]],
+    pricing_type: ['standard' as 'standard' | 'rural_house', Validators.required],
+    catalog_category: ['Habitación doble', [Validators.required, Validators.minLength(2), Validators.maxLength(70)]],
+    price_per_night: [90, [Validators.required, Validators.min(0.01), Validators.max(100000)]],
+    single_price: [30, [Validators.required, Validators.min(0), Validators.max(100000)]],
+    double_price: [45, [Validators.required, Validators.min(0.01), Validators.max(100000)]],
+    extra_bed_price: [15, [Validators.required, Validators.min(0), Validators.max(100000)]],
+    capacity: [2, [Validators.required, Validators.min(1), Validators.max(20)]],
+    features: [''],
+    is_active: [true],
+  });
+
+  readonly bulkPrices = this.fb.group({
+    single_price: [30, [Validators.required, Validators.min(0), Validators.max(100000)]],
+    double_price: [45, [Validators.required, Validators.min(0.01), Validators.max(100000)]],
+    extra_bed_price: [15, [Validators.required, Validators.min(0), Validators.max(100000)]],
+    rural_house_price: [90, [Validators.required, Validators.min(0.01), Validators.max(100000)]],
+  });
+
+  readonly blockForm = this.fb.group({
+    start_date: ['', Validators.required],
+    end_date: ['', Validators.required],
+    reason: ['', Validators.maxLength(200)],
+  });
+
+  constructor() {
+    this.loadRooms();
+  }
+
+  loadRooms(): void {
+    this.loading.set(true);
+    this.error.set('');
+    this.api.adminRooms().subscribe({
+      next: (rooms) => {
+        this.rooms.set(rooms);
+        this.loading.set(false);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.showRequestError(error, 'No se pudieron cargar las habitaciones.');
+        this.loading.set(false);
+      },
+    });
+  }
+
+  startCreate(): void {
+    this.clearMessages();
+    this.editingId.set('new');
+    this.imageDataUrl = null;
+    this.imagePreview.set(null);
+    this.form.reset({
+      name: '', description: '', pricing_type: 'standard', catalog_category: 'Habitación doble', price_per_night: 90,
+      single_price: 30, double_price: 45, extra_bed_price: 15,
+      capacity: 2, features: '', is_active: true,
+    });
+    this.cancelBlockEdit();
+  }
+
+  startEdit(room: AdminRoom): void {
+    this.clearMessages();
+    this.editingId.set(room.id);
+    this.imageDataUrl = null;
+    this.imagePreview.set(room.image_url);
+    this.form.reset({
+      name: room.name,
+      description: room.description,
+      price_per_night: room.price_per_night,
+      pricing_type: room.pricing_type,
+      catalog_category: room.catalog_category,
+      single_price: room.single_price,
+      double_price: room.double_price,
+      extra_bed_price: room.extra_bed_price,
+      capacity: room.capacity,
+      features: room.features.join('\n'),
+      is_active: room.is_active,
+    });
+    this.cancelBlockEdit();
+  }
+
+  onPricingTypeChange(): void {
+    if (this.form.controls.pricing_type.value === 'rural_house') {
+      this.form.patchValue({ capacity: 13, catalog_category: 'Casa rural' });
+    } else if (this.form.controls.capacity.value === 13) {
+      this.form.patchValue({ capacity: 2, catalog_category: 'Habitación doble' });
+    }
+  }
+
+  cancelEdit(): void {
+    this.editingId.set(null);
+    this.imageDataUrl = null;
+    this.imagePreview.set(null);
+    this.clearMessages();
+  }
+
+  selectImage(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      this.imageDataUrl = null;
+      this.imagePreview.set(this.editingId() === 'new'
+        ? null
+        : this.rooms()?.find((room) => room.id === this.editingId())?.image_url ?? null);
+      this.error.set('Selecciona una imagen JPG, PNG o WebP de hasta 5 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        this.imageDataUrl = null;
+        this.error.set('No se pudo leer la imagen seleccionada.');
+        return;
+      }
+      this.imageDataUrl = reader.result;
+      this.imagePreview.set(reader.result);
+      this.error.set('');
+    };
+    reader.onerror = () => {
+      this.imageDataUrl = null;
+      this.error.set('No se pudo leer la imagen seleccionada.');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  saveRoom(): void {
+    if (this.saving()) return;
+    this.clearMessages();
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      this.error.set('Revisa los campos obligatorios de la habitación.');
+      return;
+    }
+
+    const values = this.form.getRawValue();
+    const input: RoomInput = {
+      name: values.name.trim(),
+      description: values.description.trim(),
+      price_per_night: values.pricing_type === 'rural_house'
+        ? Number(values.price_per_night)
+        : Number(values.double_price),
+      pricing_type: values.pricing_type,
+      catalog_category: values.pricing_type === 'rural_house'
+        ? 'Casa rural'
+        : values.catalog_category.trim(),
+      single_price: Number(values.single_price),
+      double_price: Number(values.double_price),
+      extra_bed_price: Number(values.extra_bed_price),
+      capacity: Number(values.capacity),
+      features: values.features.split('\n').map((feature) => feature.trim()).filter(Boolean),
+      is_active: values.is_active,
+      ...(this.imageDataUrl ? { image_data_url: this.imageDataUrl } : {}),
+    };
+    this.saving.set(true);
+    const roomId = this.editingId();
+    const request = roomId === 'new'
+      ? this.api.createRoom(input)
+      : this.api.updateRoom(roomId!, input);
+    request.subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.editingId.set(null);
+        this.imageDataUrl = null;
+        this.notice.set(roomId === 'new' ? 'Habitación creada.' : 'Cambios guardados.');
+        this.loadRooms();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.saving.set(false);
+        this.showRequestError(error, 'No se pudo guardar la habitación.');
+      },
+    });
+  }
+
+  toggleRoomSelection(roomId: number, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.selectedRoomIds.update((ids) => checked
+      ? [...new Set([...ids, roomId])]
+      : ids.filter((id) => id !== roomId));
+  }
+
+  selectAllRooms(event: Event): void {
+    this.selectedRoomIds.set((event.target as HTMLInputElement).checked
+      ? (this.rooms() ?? []).map((room) => room.id)
+      : []);
+  }
+
+  applyBulkAction(action: 'activate' | 'deactivate' | 'delete' | 'set_prices'): void {
+    const ids = this.selectedRoomIds();
+    if (!ids.length) {
+      this.error.set('Selecciona al menos un alojamiento.');
+      return;
+    }
+    if (action === 'delete' && !window.confirm(
+      `¿Eliminar los ${ids.length} alojamientos seleccionados? Las habitaciones con reservas históricas se conservarán.`,
+    )) return;
+    if (action === 'set_prices' && this.bulkPrices.invalid) {
+      this.bulkPrices.markAllAsTouched();
+      this.error.set('Indica precios válidos para aplicar los cambios.');
+      return;
+    }
+    this.clearMessages();
+    const input = {
+      room_ids: ids,
+      action,
+      ...(action === 'set_prices' ? {
+        single_price: Number(this.bulkPrices.controls.single_price.value),
+        double_price: Number(this.bulkPrices.controls.double_price.value),
+        extra_bed_price: Number(this.bulkPrices.controls.extra_bed_price.value),
+        rural_house_price: Number(this.bulkPrices.controls.rural_house_price.value),
+      } : {}),
+    };
+    this.saving.set(true);
+    this.api.bulkRooms(input).subscribe({
+      next: (result) => {
+        this.saving.set(false);
+        if (action === 'delete') {
+          const removedIds = result.deleted ?? [];
+          this.selectedRoomIds.update((selected) => selected.filter((id) => !removedIds.includes(id)));
+          this.notice.set(result.retained?.length
+            ? `Eliminadas ${removedIds.length} habitaciones. Se conservaron desactivadas ${result.retained.length} con reservas: ${result.retained.map((room) => room.name).join(', ')}.`
+            : `Se eliminaron ${removedIds.length} habitaciones.`);
+        } else {
+          this.notice.set(action === 'set_prices'
+            ? `Precios actualizados en ${result.updated ?? 0} alojamientos.`
+            : `Estado actualizado en ${result.updated ?? 0} alojamientos.`);
+        }
+        this.loadRooms();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.saving.set(false);
+        this.showRequestError(error, 'No se pudo completar la acción masiva.');
+      },
+    });
+  }
+
+  toggleRoom(room: AdminRoom): void {
+    this.clearMessages();
+    const input = this.inputFromRoom(room, !room.is_active);
+    this.api.updateRoom(room.id, input).subscribe({
+      next: () => {
+        this.notice.set(room.is_active ? 'Habitación desactivada.' : 'Habitación activada.');
+        this.loadRooms();
+      },
+      error: (error: HttpErrorResponse) => this.showRequestError(error, 'No se pudo cambiar el estado de la habitación.'),
+    });
+  }
+
+  deleteRoom(room: AdminRoom): void {
+    if (!window.confirm(`¿Eliminar «${room.name}» y su imagen? Si tiene reservas asociadas no se podrá eliminar.`)) return;
+    this.clearMessages();
+    this.api.deleteRoom(room.id).subscribe({
+      next: () => {
+        this.notice.set('Habitación eliminada.');
+        this.loadRooms();
+      },
+      error: (error: HttpErrorResponse) => this.showRequestError(error, 'No se pudo eliminar la habitación.'),
+    });
+  }
+
+  addAvailabilityBlock(room: AdminRoom): void {
+    this.clearMessages();
+    if (this.blockForm.invalid) {
+      this.blockForm.markAllAsTouched();
+      return;
+    }
+    const input = this.blockForm.getRawValue();
+    const blockId = this.editingBlockId();
+    const request = blockId === null
+      ? this.api.addRoomAvailabilityBlock(room.id, input)
+      : this.api.updateRoomAvailabilityBlock(room.id, blockId, input);
+    request.subscribe({
+      next: (savedBlock) => {
+        this.rooms.update((rooms) => rooms?.map((current) => current.id !== room.id
+          ? current
+          : {
+            ...current,
+            availability_blocks: blockId === null
+              ? [...current.availability_blocks, savedBlock].sort((a, b) => a.start_date.localeCompare(b.start_date))
+              : current.availability_blocks.map((block) => block.id === blockId ? savedBlock : block)
+                .sort((a, b) => a.start_date.localeCompare(b.start_date)),
+          }) ?? null);
+        this.cancelBlockEdit();
+        this.notice.set(blockId === null ? 'Periodo bloqueado y guardado.' : 'Bloqueo actualizado.');
+      },
+      error: (error: HttpErrorResponse) => this.showRequestError(error, blockId === null
+        ? 'No se pudo guardar el bloqueo.'
+        : 'No se pudo actualizar el bloqueo.'),
+    });
+  }
+
+  addAvailabilityBlockForEditing(): void {
+    const roomId = this.editingId();
+    const room = this.rooms()?.find((candidate) => candidate.id === roomId);
+    if (room) this.addAvailabilityBlock(room);
+  }
+
+  removeAvailabilityBlock(room: AdminRoom, blockId: number): void {
+    this.clearMessages();
+    this.api.deleteRoomAvailabilityBlock(room.id, blockId).subscribe({
+      next: () => {
+        this.rooms.update((rooms) => rooms?.map((current) => current.id === room.id
+          ? {...current, availability_blocks: current.availability_blocks.filter((block) => block.id !== blockId)}
+          : current) ?? null);
+        if (this.editingBlockId() === blockId) this.cancelBlockEdit();
+        this.notice.set('Bloqueo eliminado.');
+      },
+      error: (error: HttpErrorResponse) => this.showRequestError(error, 'No se pudo eliminar el bloqueo.'),
+    });
+  }
+
+  editAvailabilityBlock(block: AdminRoom['availability_blocks'][number]): void {
+    this.clearMessages();
+    this.editingBlockId.set(block.id);
+    this.blockForm.reset({
+      start_date: block.start_date,
+      end_date: block.end_date,
+      reason: block.reason,
+    });
+  }
+
+  cancelBlockEdit(): void {
+    this.editingBlockId.set(null);
+    this.blockForm.reset({start_date: '', end_date: '', reason: ''});
+  }
+
+  private inputFromRoom(room: AdminRoom, isActive: boolean): RoomInput {
+    return {
+      name: room.name,
+      description: room.description,
+      price_per_night: room.price_per_night,
+      pricing_type: room.pricing_type,
+      catalog_category: room.catalog_category,
+      single_price: room.single_price,
+      double_price: room.double_price,
+      extra_bed_price: room.extra_bed_price,
+      capacity: room.capacity,
+      features: room.features,
+      is_active: isActive,
+    };
+  }
+
+  private clearMessages(): void {
+    this.error.set('');
+    this.notice.set('');
+  }
+
+  private showRequestError(error: HttpErrorResponse, fallback: string): void {
+    console.error(fallback, error);
+    this.error.set(error.error?.errors?.[0] ?? fallback);
+  }
+}

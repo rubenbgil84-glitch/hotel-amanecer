@@ -1,0 +1,60 @@
+:host {
+  display: block;
+}
+
+.hero {
+  overflow: visible;
+  margin-bottom: 3.5rem;
+}
+
+.hero-in {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 590px;
+  align-content: center;
+  padding-block: 4rem 7rem;
+}
+
+.hero-copy h1 {
+  max-width: 9ch;
+}
+
+.availability-panel {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: -3rem;
+  left: 0;
+  padding: 1.4rem;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, .2);
+}
+
+@media (max-width: 1000px) {
+  .availability-panel {
+    width: calc(100% - 3.5rem);
+  }
+}
+
+@media (max-width: 760px) {
+  .hero {
+    margin-bottom: 2.5rem;
+  }
+
+  .hero-in {
+    min-height: 580px;
+    padding-block: 4rem 9rem;
+  }
+
+  .availability-panel {
+    bottom: -2rem;
+    width: calc(100% - 2.5rem);
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .availability-panel {
+    width: calc(100% - 2rem);
+  }
+}

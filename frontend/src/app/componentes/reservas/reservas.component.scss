@@ -1,0 +1,18 @@
+:host {
+  display: block;
+}
+
+.availability-message {
+  max-width: 700px;
+  margin-inline: auto;
+  text-align: center;
+
+  h2 {
+    font-size: clamp(2.2rem, 4vw, 3.5rem);
+  }
+
+  p {
+    margin-bottom: 1.5rem;
+    color: var(--muted);
+  }
+}

@@ -1,0 +1,24 @@
+<form class="availability-form" [formGroup]="form" (ngSubmit)="search()" novalidate>
+  <app-calendario-rango formControlName="date_range" />
+  <label>Adultos
+    <select formControlName="adults">
+      @for (count of adultsOptions; track count) {
+        <option [ngValue]="count">{{ count }}</option>
+      }
+    </select>
+  </label>
+  <label>Niños
+    <select formControlName="children">
+      @for (count of childrenOptions; track count) {
+        <option [ngValue]="count">{{ count }}</option>
+      }
+    </select>
+  </label>
+  <button type="button" class="btn" [disabled]="searching()" (click)="search()">
+    {{ searching() ? 'Consultando…' : 'Consultar disponibilidad' }}
+    @if (!searching()) { <span aria-hidden="true">→</span> }
+  </button>
+  @if (error()) {
+    <p class="search-error" role="alert">{{ error() }}</p>
+  }
+</form>

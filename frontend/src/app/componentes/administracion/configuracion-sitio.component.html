@@ -1,0 +1,254 @@
+<div class="admin-page">
+  <header class="admin-header">
+    <div class="wrap admin-header-inner">
+      <a class="admin-brand" routerLink="/carmen-admin/dashboard">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Hotel Amanecer <small>Administración</small></span>
+      </a>
+      <a class="back-link" routerLink="/carmen-admin/dashboard">Volver al panel</a>
+    </div>
+  </header>
+
+  <main class="wrap settings-page">
+    <p class="eyebrow">Contenido y opiniones</p>
+    <h1>Configuración del sitio</h1>
+    <p class="page-intro">Actualiza los datos del hotel y los textos que aparecen en la página de inicio.</p>
+
+    @if (error()) {
+      <p class="message message--error" role="alert">{{ error() }}</p>
+    }
+    @if (notice()) {
+      <p class="message message--success" role="status">{{ notice() }}</p>
+    }
+
+    @if (loading()) {
+      <p role="status">Cargando configuración…</p>
+    } @else {
+      <form (ngSubmit)="save()">
+        @for (group of groups; track group.title) {
+          <section class="settings-card" [attr.aria-labelledby]="'group-' + $index">
+            <h2 [id]="'group-' + $index">{{ group.title }}</h2>
+            <div class="field-grid">
+              @for (item of group.fields; track item.key) {
+                <label class="field" [class.field--wide]="item.type === 'textarea' || item.type === 'url' || item.type === 'image'">
+                  <span>{{ item.label }}</span>
+                  @if (item.type === 'image') {
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      [name]="item.key + '_upload'"
+                      (change)="onImageSelected($event, item.key)" />
+                    <img class="image-preview" [src]="imagePreview(item.key)" [alt]="'Vista previa: ' + item.label" />
+                    <small>JPG, PNG o WebP · máximo 5 MB. Se guardará en el servidor del hotel.</small>
+                  } @else if (item.type === 'select') {
+                    <select [name]="item.key" [(ngModel)]="draft[item.key]">
+                      <option value="false">No, con horario</option>
+                      <option value="true">Sí, recepción 24 horas</option>
+                    </select>
+                  } @else if (item.type === 'textarea') {
+                    <textarea
+                      [name]="item.key"
+                      [(ngModel)]="draft[item.key]"
+                      [attr.maxlength]="item.key.endsWith('_content') ? 10000 : (item.key === 'about_services' ? 12000 : 2000)"
+                      [required]="item.key === 'site_address'"
+                      rows="3"></textarea>
+                  } @else {
+                    <input
+                      [type]="item.type"
+                      [name]="item.key"
+                      [(ngModel)]="draft[item.key]"
+                      maxlength="2000"
+                      [min]="item.key === 'hotel_stars' ? 0 : null"
+                      [max]="item.key === 'hotel_stars' ? 5 : (item.key === 'breakfast_price' || item.key === 'pets_price' ? 10000 : null)"
+                      [step]="item.key === 'hotel_stars' ? 1 : (item.key === 'breakfast_price' || item.key === 'pets_price' ? 0.01 : null)"
+                      [attr.inputmode]="item.key === 'hotel_stars' ? 'numeric' : null"
+                      [required]="item.key === 'site_name' || item.key === 'site_phone' || item.key === 'site_map_url' || item.key.endsWith('_image_path') || item.key.endsWith('_time')"
+                      [disabled]="item.key.endsWith('_time') && draft.reception_24h === 'true'"
+                      (ngModelChange)="normalizeNumericSetting(item.key, $event)" />
+                  }
+                </label>
+              }
+            </div>
+          </section>
+        }
+        <section class="settings-card" aria-labelledby="services-list-title">
+          <h2 id="services-list-title">Servicios de Conócenos</h2>
+          <p>Estos elementos se muestran en la página del hotel. Puedes añadir, editar o eliminar servicios.</p>
+          <div class="editable-list">
+            @for (service of services; track $index) {
+              <article class="editable-item">
+                <label class="field">
+                  <span>Nombre del servicio</span>
+                  <input type="text" [name]="'service_title_' + $index" [(ngModel)]="service.title" maxlength="100" required />
+                </label>
+                <label class="field">
+                  <span>Descripción</span>
+                  <textarea [name]="'service_description_' + $index" [(ngModel)]="service.description" maxlength="600" rows="3" required></textarea>
+                </label>
+                <button type="button" class="secondary-button" (click)="removeService($index)">Eliminar servicio</button>
+              </article>
+            }
+          </div>
+          <button type="button" class="secondary-button" (click)="addService()">Añadir servicio</button>
+        </section>
+
+        <section class="settings-card" aria-labelledby="social-title">
+          <h2 id="social-title">Redes sociales</h2>
+          <p>Activa solo los perfiles que quieras mostrar. Los enlaces deben comenzar por https:// o http://.</p>
+          <div class="editable-list">
+            @for (social of socialLinks; track social.id) {
+              <article class="editable-item editable-item--social">
+                <label class="field">
+                  <span>Red social</span>
+                  <input type="text" [name]="'social_name_' + $index" [(ngModel)]="social.name" maxlength="50" required />
+                </label>
+                <label class="field">
+                  <span>Enlace del perfil</span>
+                  <input type="url" [name]="'social_url_' + $index" [(ngModel)]="social.url" maxlength="500" placeholder="https://…" />
+                </label>
+                <label class="social-enabled">
+                  <input type="checkbox" [name]="'social_enabled_' + $index" [(ngModel)]="social.enabled" />
+                  <span>Mostrar en la web</span>
+                </label>
+                <button type="button" class="secondary-button" (click)="removeSocialLink($index)">Eliminar red</button>
+              </article>
+            }
+          </div>
+          <button type="button" class="secondary-button" (click)="addSocialLink()">Añadir red social</button>
+        </section>
+        <div class="form-actions">
+          <button class="primary-button" type="submit" [disabled]="saving() || pendingImageReads() > 0">
+            {{ pendingImageReads() > 0 ? 'Procesando imágenes…' : (saving() ? 'Guardando…' : 'Guardar configuración') }}
+          </button>
+        </div>
+      </form>
+    }
+
+    <section class="settings-card" aria-labelledby="vat-rates-title">
+      <h2 id="vat-rates-title">IVA por fecha de aplicación</h2>
+      <p>Se aplica el tipo vigente para cada noche de estancia. Los informes conservan el desglose histórico de cada reserva.</p>
+      <div class="vat-rate-list">
+        @for (vat of vatRates(); track vat.id) {
+          <div class="vat-rate-row">
+            <label class="field">
+              <span>Vigente desde</span>
+              <input type="date" [name]="'vat_date_' + vat.id" [(ngModel)]="vat.effective_from" [disabled]="$index === 0" />
+            </label>
+            <label class="field">
+              <span>Tipo (%)</span>
+              <input type="number" [name]="'vat_rate_' + vat.id" [(ngModel)]="vat.rate" min="0" max="100" step="0.01" />
+            </label>
+            <div class="vat-actions">
+              <button type="button" class="secondary-button" [disabled]="savingVatRate()" (click)="updateVatRate(vat)">Guardar</button>
+              <button type="button" class="secondary-button" [disabled]="savingVatRate()" (click)="deleteVatRate(vat)">Eliminar</button>
+            </div>
+          </div>
+        }
+      </div>
+      <form class="vat-rate-form" (ngSubmit)="addVatRate()">
+        <label class="field">
+          <span>Nueva fecha de aplicación</span>
+          <input type="date" name="new_vat_date" [(ngModel)]="vatRateDraft.effective_from" required />
+        </label>
+        <label class="field">
+          <span>Nuevo tipo (%)</span>
+          <input type="number" name="new_vat_rate" [(ngModel)]="vatRateDraft.rate" min="0" max="100" step="0.01" required />
+        </label>
+        <button type="submit" class="primary-button" [disabled]="savingVatRate()">Añadir / actualizar fecha</button>
+      </form>
+    </section>
+
+    <section class="settings-card closure-section" aria-labelledby="closure-title">
+      <h2 id="closure-title">Cierres por vacaciones</h2>
+      <p>Durante estos periodos no se aceptarán reservas con fechas que coincidan con el cierre.</p>
+      <form class="closure-form" (ngSubmit)="saveClosure()">
+        <label class="field">
+          <span>Desde</span>
+          <input type="date" name="closure_start" [min]="today" [(ngModel)]="closureDraft.start_date" required />
+        </label>
+        <label class="field">
+          <span>Hasta (inclusive)</span>
+          <input type="date" name="closure_end" [min]="closureDraft.start_date || today" [(ngModel)]="closureDraft.end_date" required />
+        </label>
+        <label class="field field--wide">
+          <span>Motivo</span>
+          <input type="text" name="closure_reason" [(ngModel)]="closureDraft.reason" maxlength="200" placeholder="Vacaciones, mantenimiento…" />
+        </label>
+        <div class="closure-actions">
+          @if (editingClosure) {
+            <button type="button" class="secondary-button" (click)="cancelClosureEdit()">Cancelar edición</button>
+          }
+          <button type="submit" class="primary-button">
+            {{ editingClosure ? 'Guardar cambios' : 'Añadir periodo' }}
+          </button>
+        </div>
+      </form>
+      @if (closures().length === 0) {
+        <p class="empty-state">No hay periodos de cierre futuros o en curso.</p>
+      } @else {
+        <div class="closure-list">
+          @for (closure of closures(); track closure.id) {
+            <article class="closure-item">
+              <div>
+                <strong>{{ closure.start_date | date: 'dd/MM/yyyy' : 'UTC' }} – {{ closure.end_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong>
+                <p>{{ closure.reason || 'Cierre del hotel' }}</p>
+              </div>
+              <div class="closure-actions">
+                <button type="button" class="secondary-button" (click)="editClosure(closure)">Editar</button>
+                <button type="button" class="secondary-button" (click)="removeClosure(closure)">Eliminar</button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="settings-card review-section" aria-labelledby="reviews-title">
+      <div class="section-title">
+        <div>
+          <h2 id="reviews-title">Opiniones de huéspedes</h2>
+          <p>Las opiniones solo aparecerán en la web cuando las publiques.</p>
+        </div>
+        <span class="review-count">{{ testimonials().length }}</span>
+      </div>
+
+      @if (testimonials().length === 0) {
+        <p class="empty-state">Todavía no hay opiniones recibidas.</p>
+      } @else {
+        <div class="review-list">
+          @for (testimonial of testimonials(); track testimonial.id) {
+            <article class="review-card">
+              <div class="review-heading">
+                <div>
+                  <h3>{{ testimonial.display_name }}</h3>
+                  <p class="review-meta">{{ testimonial.rating }} de 5 estrellas · {{ categoryLabel(testimonial) }}</p>
+                </div>
+                <span class="review-status" [class.review-status--published]="testimonial.is_approved">
+                  {{ testimonial.is_approved ? 'Publicada' : (testimonial.moderated_at ? 'No publicada' : 'Pendiente') }}
+                </span>
+              </div>
+              <blockquote>{{ testimonial.message }}</blockquote>
+              <p class="booking-meta">
+                Reserva {{ testimonial.reservation_code }} · {{ testimonial.guest_name }} ·
+                {{ testimonial.email }} · {{ testimonial.room_name }}
+              </p>
+              <div class="review-actions">
+                @if (testimonial.is_approved) {
+                  <button type="button" class="secondary-button" [disabled]="moderatingId() === testimonial.id"
+                    (click)="moderate(testimonial, false)">Retirar publicación</button>
+                } @else {
+                  <button type="button" class="primary-button" [disabled]="moderatingId() === testimonial.id"
+                    (click)="moderate(testimonial, true)">Publicar</button>
+                  @if (!testimonial.moderated_at) {
+                    <button type="button" class="secondary-button" [disabled]="moderatingId() === testimonial.id"
+                      (click)="moderate(testimonial, false)">No publicar</button>
+                  }
+                }
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  </main>
+</div>

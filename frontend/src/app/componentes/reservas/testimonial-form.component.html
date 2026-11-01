@@ -1,0 +1,114 @@
+<main class="review-page">
+  <div class="review-shell">
+    <a class="review-brand" routerLink="/">{{ siteContent.settings().site_name }}</a>
+
+    @if (status() === 'loading') {
+      <p class="feedback" role="status">Comprobando el enlace…</p>
+    } @else if (status() === 'invalid') {
+      <section class="review-card" role="alert">
+        <p class="eyebrow">Enlace no disponible</p>
+        <h1>No podemos abrir este formulario</h1>
+        <p>{{ loadingError() }}</p>
+        <a class="text-link" routerLink="/">Volver al hotel</a>
+      </section>
+    } @else if (status() === 'submitted') {
+      <section class="review-card review-success" role="status">
+        <span class="success-mark" aria-hidden="true">✓</span>
+        <p class="eyebrow">Gracias por compartir</p>
+        <h1>Tu opinión ya está con nosotros</h1>
+        <p>Gracias por dedicar un momento a contarnos cómo fue tu estancia. Nos ayuda a seguir cuidando cada detalle.</p>
+        <a class="primary-link" routerLink="/">Volver a la página principal</a>
+      </section>
+    } @else {
+      <section class="review-card">
+        <p class="eyebrow">Nos encantará conocer tu experiencia</p>
+        <h1>¿Cómo fue tu estancia?</h1>
+        <p class="welcome-copy">
+          Hola {{ invitation()?.guest_name }}. Cuéntanos qué te pareció tu visita
+          @if (invitation()?.room_name) { en <strong>{{ invitation()?.room_name }}</strong> }.
+        </p>
+
+        @if (submitError()) {
+          <p class="feedback feedback--error" role="alert">{{ submitError() }}</p>
+        }
+
+        <form (ngSubmit)="submit()">
+          <fieldset class="rating-field">
+            <legend>Tu valoración</legend>
+            <div class="rating-buttons" role="group" aria-label="Valoración de una a cinco estrellas">
+              @for (star of [1, 2, 3, 4, 5]; track star) {
+                <button
+                  type="button"
+                  class="star-button"
+                  [class.star-button--selected]="star <= rating()"
+                  [attr.aria-label]="star + (star === 1 ? ' estrella' : ' estrellas')"
+                  [attr.aria-pressed]="rating() === star"
+                  (click)="rating.set(star)">★</button>
+              }
+            </div>
+          </fieldset>
+
+          <label class="form-field">
+            <span>Tu opinión</span>
+            <textarea
+              name="message"
+              [(ngModel)]="draft.message"
+              required
+              minlength="20"
+              maxlength="1200"
+              rows="6"
+              placeholder="¿Qué destacarías de tu estancia?"></textarea>
+            <small>{{ draft.message.length }}/1200 caracteres (mínimo 20).</small>
+          </label>
+
+          <label class="form-field">
+            <span>¿Cómo quieres aparecer en la web?</span>
+            <input
+              name="display_name"
+              [(ngModel)]="draft.display_name"
+              required
+              minlength="2"
+              maxlength="80"
+              placeholder="Por ejemplo, Marta R." />
+          </label>
+
+          <label class="form-field">
+            <span>¿Qué tipo de viaje fue?</span>
+            <select name="travel_type" [(ngModel)]="draft.travel_type" required>
+              <option value="" disabled>Selecciona una opción</option>
+              @for (category of categories; track category.value) {
+                <option [value]="category.value">{{ category.label }}</option>
+              }
+            </select>
+          </label>
+
+          @if (draft.travel_type === 'other') {
+            <label class="form-field">
+              <span>Especifica el tipo de viaje</span>
+              <input
+                name="travel_type_other"
+                [(ngModel)]="draft.travel_type_other"
+                required
+                minlength="2"
+                maxlength="80"
+                placeholder="Por ejemplo, una celebración" />
+            </label>
+          }
+
+          <label class="publication-consent">
+            <input
+              type="checkbox"
+              name="publication_consent"
+              [(ngModel)]="draft.publication_consent"
+              required />
+            <span>Acepto que mi opinión y el nombre público que he elegido se publiquen en la web.</span>
+          </label>
+
+          <button class="primary-button" type="submit" [disabled]="submitting()">
+            {{ submitting() ? 'Enviando…' : 'Enviar mi opinión' }}
+          </button>
+        </form>
+      </section>
+    }
+  </div>
+</main>

@@ -1,0 +1,17 @@
+<section class="rooms-hero">
+  <div class="wrap rooms-hero-inner">
+    <p class="eyebrow">Unos pasos más</p>
+    <h1>Confirma tu estancia.</h1>
+    <p>Completa tus datos para solicitar la reserva de la habitación elegida.</p>
+  </div>
+</section>
+
+<section class="section wrap reservation-page" aria-label="Formulario de reserva">
+  @if (rooms() === undefined) {
+    <p class="muted" role="status">Cargando habitaciones…</p>
+  } @else if (rooms() === null) {
+    <p class="muted" role="alert">No se pudieron cargar las habitaciones. Comprueba que el backend y la base de datos estén en marcha.</p>
+  } @else {
+    <app-booking-form [rooms]="rooms()" />
+  }
+</section>
