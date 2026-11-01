@@ -16,11 +16,12 @@ import {
   VatRate,
 } from '../../api.service';
 import { CalendarioRango, DateRange } from '../compartidos/calendario-rango/calendario-rango.component';
+import { RoomGallery } from '../compartidos/room-gallery/room-gallery.component';
 
 @Component({
   selector: 'app-booking-form',
   standalone: true,
-  imports: [ReactiveFormsModule, CurrencyPipe, DatePipe, CalendarioRango],
+  imports: [ReactiveFormsModule, CurrencyPipe, DatePipe, CalendarioRango, RoomGallery],
   templateUrl: './reserva-form.component.html',
   styleUrl: './reserva-form.component.scss',
 })
@@ -91,6 +92,12 @@ export class ReservaForm {
     return (this.checkedRooms() ?? this.rooms() ?? []).find((room) => room.id === roomId)
       ?? (this.rooms() ?? []).find((room) => room.id === roomId)
       ?? null;
+  });
+  readonly selectedRoomImages = computed(() => {
+    const room = this.selectedRoom();
+    const images = room?.images?.map((image) => image.image_url).filter(Boolean) ?? [];
+    const imageUrl = room?.image_url;
+    return images.length ? images : imageUrl ? [imageUrl] : [];
   });
   readonly nights = computed(() => {
     const range = this.currentValues().date_range;

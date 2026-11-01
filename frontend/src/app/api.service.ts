@@ -315,6 +315,7 @@ export interface ReservationDetails {
   room_capacity: number;
   room_features: string[];
   room_image_url: string | null;
+  room_images: RoomImage[];
   check_in: string;
   check_out: string;
   adults: number;

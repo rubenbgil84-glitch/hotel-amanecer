@@ -46,12 +46,13 @@
   <div class="reservation-layout">
     <aside class="room-summary" aria-labelledby="selected-room-title">
       @if (selectedRoom(); as room) {
-        <div class="summary-image">
-          <img
-            [src]="room.image_url || '/api/web-images/hotel.png'"
-            [alt]="'Interior de ' + room.name"
-            decoding="async" />
-        </div>
+        <app-room-gallery
+          class="summary-image"
+          variant="summary"
+          [imageUrls]="selectedRoomImages()"
+          [fallbackImage]="room.image_url || '/api/web-images/hotel.png'"
+          [alt]="'Interior de ' + room.name"
+          loading="eager" />
         <div class="summary-content">
           <p class="eyebrow">Tu habitación</p>
           <h2 id="selected-room-title">{{ room.name }}</h2>

@@ -1,0 +1,144 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.gallery {
+  display: grid;
+  min-width: 0;
+  gap: .55rem;
+}
+
+.gallery-viewport {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1.5;
+  background: #e9e6de;
+}
+
+.gallery-main-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform .5s ease;
+}
+
+:host-context(.room:hover) .gallery-main-image {
+  transform: scale(1.035);
+}
+
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  width: 2.4rem;
+  height: 2.4rem;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 50%;
+  background: rgb(20 30 25 / 72%);
+  color: #fff;
+  font-size: 1.7rem;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background .2s ease, transform .2s ease;
+
+  &:hover {
+    background: #244536;
+    transform: translateY(-50%) scale(1.06);
+  }
+}
+
+.gallery-previous {
+  left: .7rem;
+}
+
+.gallery-next {
+  right: .7rem;
+}
+
+.gallery-count {
+  position: absolute;
+  right: .7rem;
+  bottom: .7rem;
+  padding: .25rem .6rem;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 99px;
+  background: rgb(20 30 25 / 76%);
+  color: #fff;
+  font-size: .72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.gallery-thumbnails {
+  display: flex;
+  gap: .45rem;
+  overflow-x: auto;
+  padding: .12rem .08rem .3rem;
+  scrollbar-color: #9da58f transparent;
+  scrollbar-width: thin;
+}
+
+.gallery-thumbnail {
+  flex: 0 0 4.1rem;
+  width: 4.1rem;
+  height: 3rem;
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 2px;
+  background: #e9e6de;
+  cursor: pointer;
+  opacity: .7;
+  transition: border-color .2s ease, opacity .2s ease, transform .2s ease;
+
+  &:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+
+  &.active {
+    border-color: #365843;
+    opacity: 1;
+  }
+
+  &:focus-visible,
+  &.active {
+    outline: 2px solid #fff;
+    outline-offset: -4px;
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.summary-viewport {
+  aspect-ratio: 1.45;
+}
+
+.detail-viewport {
+  aspect-ratio: 1.9;
+}
+
+@media (max-width: 480px) {
+  .gallery-thumbnail {
+    flex-basis: 3.65rem;
+    width: 3.65rem;
+    height: 2.65rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery-main-image,
+  .gallery-arrow,
+  .gallery-thumbnail {
+    transition: none;
+  }
+}

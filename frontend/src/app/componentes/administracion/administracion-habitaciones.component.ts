@@ -4,11 +4,12 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdminRoom, ApiService, RoomInput } from '../../api.service';
+import { RoomGallery } from '../compartidos/room-gallery/room-gallery.component';
 
 @Component({
   selector: 'app-admin-rooms',
   standalone: true,
-  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink],
+  imports: [CurrencyPipe, DatePipe, ReactiveFormsModule, RouterLink, RoomGallery],
   templateUrl: './administracion-habitaciones.component.html',
   styleUrl: './administracion-habitaciones.component.scss',
 })
@@ -41,6 +42,11 @@ export class AdministracionHabitaciones {
     return selectedCount > 0 && selectedCount < roomCount;
   });
   private imageDataUrls: string[] = [];
+
+  roomImageUrls(room: AdminRoom): string[] {
+    const images = room.images?.map((image) => image.image_url).filter(Boolean) ?? [];
+    return images.length ? images : room.image_url ? [room.image_url] : [];
+  }
 
   readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],

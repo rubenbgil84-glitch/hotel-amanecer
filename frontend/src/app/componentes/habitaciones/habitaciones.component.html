@@ -1,9 +1,9 @@
 <section class="rooms-hero">
   <div class="wrap rooms-hero-inner">
     @if (isRuralPage) {
-      <p class="eyebrow">Una estancia para compartir</p>
-      <h1>Casa rural</h1>
-      <p>Descubre una estancia independiente para disfrutar con familia y amigos.</p>
+      <p class="eyebrow">Un descanso con historia en el Camino de Santiago</p>
+      <h1>Casa Rural Paso Camino de Santiago</h1>
+      <p>Una casa centenaria de adobe y madera, rehabilitada para compartir una estancia tranquila con familia y amigos.</p>
     } @else {
       <p class="eyebrow">Espacios para sentirte bien</p>
       <h1>Tu habitación, tu manera de viajar.</h1>
@@ -11,13 +11,44 @@
     }
   </div>
 </section>
+@if (isRuralPage) {
+  <section class="rural-intro" aria-labelledby="rural-intro-title">
+    <div class="wrap rural-intro-grid">
+      <div class="rural-intro-copy">
+        <p class="eyebrow">Tradición, comodidad y espacio para todos</p>
+        <h2 id="rural-intro-title">Una casa para vivir el camino a tu ritmo</h2>
+        <p>Con capacidad para grupos de 2 a 13 personas, la casa combina el carácter de la arquitectura tradicional con las comodidades necesarias para sentirse como en casa. El Camino de Santiago pasa junto a la puerta.</p>
+        <a class="btn rural-booking-link" href="#casa-rural-reserva">Ver la casa y reservar <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="rural-highlights" aria-label="Lo que encontrarás en la casa rural">
+        <article class="rural-highlight">
+          <span class="rural-highlight-number" aria-hidden="true">01</span>
+          <div><h3>Descanso compartido</h3><p>Habitaciones dobles con baño para alojaros con comodidad.</p></div>
+        </article>
+        <article class="rural-highlight">
+          <span class="rural-highlight-number" aria-hidden="true">02</span>
+          <div><h3>Espacios para reunirse</h3><p>Salón con chimenea, juegos de mesa y cocina totalmente equipada.</p></div>
+        </article>
+        <article class="rural-highlight">
+          <span class="rural-highlight-number" aria-hidden="true">03</span>
+          <div><h3>Al aire libre</h3><p>Patio-terraza, barbacoa y parking para disfrutar de la estancia sin prisas.</p></div>
+        </article>
+        <article class="rural-highlight">
+          <span class="rural-highlight-number" aria-hidden="true">04</span>
+          <div><h3>Confort durante todo el año</h3><p>Calefacción, agua caliente y los servicios del hotel.</p></div>
+        </article>
+      </div>
+    </div>
+  </section>
+}
 <section class="section wrap rooms-list" aria-labelledby="rooms-list-title">
+  <span id="casa-rural-reserva" class="rural-reservation-anchor"></span>
   <div class="section-heading">
     <div>
-      <p class="eyebrow">{{ isRuralPage ? 'Una estancia para compartir' : 'Elige tu espacio' }}</p>
-      <h2 id="rooms-list-title">{{ isRuralPage ? 'Nuestra casa rural' : selectedCategory() || 'Nuestras habitaciones' }}</h2>
+      <p class="eyebrow">{{ isRuralPage ? 'Tu estancia, a tu manera' : 'Elige tu espacio' }}</p>
+      <h2 id="rooms-list-title">{{ isRuralPage ? 'Descubre la casa' : selectedCategory() || 'Nuestras habitaciones' }}</h2>
     </div>
-    <p class="muted">Precios por noche</p>
+    <p class="muted">{{ isRuralPage ? 'Hasta 13 personas · precio por noche' : 'Precios por noche' }}</p>
   </div>
   @if (selectedCategory() && !isRuralPage) {
     <p class="category-filter">Mostrando la categoría {{ selectedCategory() }}. <a routerLink="/habitaciones" (click)="clearCategoryFilter()">Ver todas las habitaciones</a></p>

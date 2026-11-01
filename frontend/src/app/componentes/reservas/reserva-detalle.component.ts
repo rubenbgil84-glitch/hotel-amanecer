@@ -1,15 +1,16 @@
 import { CurrencyPipe, DatePipe } from '@angular/common';
 import type { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService, type ReservationDetails as ReservationDetailsData } from '../../api.service';
 import { SiteContentService } from '../../site-content.service';
+import { RoomGallery } from '../compartidos/room-gallery/room-gallery.component';
 
 @Component({
   selector: 'app-reserva-detalle',
   standalone: true,
-  imports: [CurrencyPipe, DatePipe, RouterLink],
+  imports: [CurrencyPipe, DatePipe, RouterLink, RoomGallery],
   templateUrl: './reserva-detalle.component.html',
   styleUrl: './reserva-detalle.component.scss',
 })
@@ -22,6 +23,7 @@ export class ReservaDetalle {
   readonly booking = signal<ReservationDetailsData | null>(null);
   readonly status = signal<'loading' | 'ready' | 'invalid'>('loading');
   readonly token = signal('');
+  readonly roomGalleryImages = computed(() => this.booking()?.room_images.map((image) => image.image_url) ?? []);
 
   documentTypeLabel(value: string | null): string {
     return ({

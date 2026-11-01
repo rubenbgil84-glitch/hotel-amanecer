@@ -58,9 +58,12 @@
       <section class="details-section">
         <h2>Habitación</h2>
         <div class="room-summary">
-          @if (booking()!.room_image_url) {
-            <img class="room-image" [src]="booking()!.room_image_url" [alt]="'Imagen de ' + booking()!.room_name" />
-          }
+          <app-room-gallery
+            class="room-image"
+            variant="detail"
+            [imageUrls]="roomGalleryImages()"
+            [fallbackImage]="booking()!.room_image_url || '/api/web-images/hotel.png'"
+            [alt]="'Imagen de ' + booking()!.room_name" />
           <h3>{{ booking()!.room_name }}</h3>
           <p>{{ booking()!.room_description }}</p>
           <p>Capacidad: {{ booking()!.room_capacity }} {{ booking()!.room_capacity === 1 ? 'persona' : 'personas' }}</p>

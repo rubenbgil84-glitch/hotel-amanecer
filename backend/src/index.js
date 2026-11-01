@@ -1993,6 +1993,8 @@ app.get("/api/reservations/:token", async (req, res, next) => {
               b.discount_code, b.discount_amount::float8 AS discount_amount, b.created_at,
               r.name AS room_name, r.description AS room_description, r.capacity AS room_capacity,
               r.features AS room_features, r.image_url AS room_image_url,
+              COALESCE((SELECT json_agg(json_build_object('id', ri.id, 'image_url', ri.image_url, 'position', ri.position)
+                ORDER BY ri.position, ri.id) FROM room_images ri WHERE ri.room_id = r.id), '[]'::json) AS room_images,
               p.completed_at AS precheckin_completed_at,
               p.identity_document AS precheckin_identity_document,
               p.phone_mobile, p.email AS precheckin_email,
@@ -5449,7 +5451,9 @@ app.get("/api/rooms/availability", async (req, res, next) => {
               r.pricing_type, r.single_price::float8 AS single_price,
               r.double_price::float8 AS double_price,
               r.extra_bed_price::float8 AS extra_bed_price,
-              r.capacity, r.features, r.image_url
+              r.capacity, r.features, r.image_url, r.catalog_category,
+              COALESCE((SELECT json_agg(json_build_object('id', ri.id, 'image_url', ri.image_url, 'position', ri.position)
+                ORDER BY ri.position, ri.id) FROM room_images ri WHERE ri.room_id = r.id), '[]'::json) AS images
          FROM rooms r
         WHERE r.is_active = TRUE
           AND r.capacity >= $3

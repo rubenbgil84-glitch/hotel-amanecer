@@ -230,8 +230,8 @@
               <div class="room-grid">
                 @for (room of standardRooms(); track room.id) {
                   <article class="room-card">
-                    @if (room.image_url) {
-                      <img class="room-image" [src]="room.image_url" [alt]="'Imagen de ' + room.name" loading="lazy" />
+                    @if (room.images?.length || room.image_url) {
+                      <app-room-gallery class="room-image" [imageUrls]="roomImageUrls(room)" [alt]="'Imagen de ' + room.name" />
                     } @else {
                       <div class="room-image image-placeholder">Sin imagen</div>
                     }
@@ -261,8 +261,8 @@
               <div class="room-grid">
                 @for (room of ruralHouses(); track room.id) {
                   <article class="room-card">
-                    @if (room.image_url) {
-                      <img class="room-image" [src]="room.image_url" [alt]="'Imagen de ' + room.name" loading="lazy" />
+                    @if (room.images?.length || room.image_url) {
+                      <app-room-gallery class="room-image" [imageUrls]="roomImageUrls(room)" [alt]="'Imagen de ' + room.name" />
                     } @else {
                       <div class="room-image image-placeholder">Sin imagen</div>
                     }
