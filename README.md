@@ -66,3 +66,4 @@ El formulario recoge datos identificativos, contacto, preferencias y consentimie
 - Fotos reales: pon `image_url` en la tabla `rooms` (por ejemplo `/img/suite.jpg`) y deja los archivos en `frontend/public/img/`.
 - Todos los textos, nombres y datos de contacto son ficticios. No se ha copiado ningún texto ni imagen de otras plantillas.
 # amanecer
+# amanecer
