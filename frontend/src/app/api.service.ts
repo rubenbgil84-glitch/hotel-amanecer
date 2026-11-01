@@ -24,7 +24,14 @@ export interface Room {
   capacity: number;
   features: string[];
   image_url: string | null;
+  images?: RoomImage[];
   is_active?: boolean;
+}
+
+export interface RoomImage {
+  id: number;
+  image_url: string;
+  position: number;
 }
 
 export interface RoomAvailabilityBlock {
@@ -164,6 +171,8 @@ export interface RoomInput {
   features: string[];
   is_active: boolean;
   image_data_url?: string;
+  image_data_urls?: string[];
+  remove_image_ids?: number[];
 }
 
 export interface BookingInput {

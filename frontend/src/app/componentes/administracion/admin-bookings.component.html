@@ -86,8 +86,8 @@
                   <small>{{ booking.phone || 'Teléfono no indicado' }}</small>
                 </td>
                 <td class="dates-cell">
-                  <span>{{ booking.check_in | date: 'dd/MM/yyyy' : 'UTC' }}</span>
-                  <small>hasta {{ booking.check_out | date: 'dd/MM/yyyy' : 'UTC' }}</small>
+                  <span>{{ booking.check_in | date: 'dd/MM/yyyy' }}</span>
+                  <small>hasta {{ booking.check_out | date: 'dd/MM/yyyy' }}</small>
                 </td>
                 <td>{{ booking.adults }} adultos · {{ booking.children }} niños</td>
                 <td>
@@ -136,8 +136,8 @@
             <h3>Estancia</h3>
             <dl>
               <dt>Habitación</dt><dd>{{ booking.room_name }}</dd>
-              <dt>Entrada</dt><dd>{{ booking.check_in | date: 'dd/MM/yyyy' : 'UTC' }}</dd>
-              <dt>Salida</dt><dd>{{ booking.check_out | date: 'dd/MM/yyyy' : 'UTC' }}</dd>
+              <dt>Entrada</dt><dd>{{ booking.check_in | date: 'dd/MM/yyyy' }}</dd>
+              <dt>Salida</dt><dd>{{ booking.check_out | date: 'dd/MM/yyyy' }}</dd>
               <dt>Huéspedes</dt><dd>{{ booking.adults }} adultos · {{ booking.children }} niños</dd>
               <dt>Desayuno</dt><dd>{{ booking.breakfast ? 'Sí' : 'No' }}</dd>
               <dt>Mascotas</dt><dd>{{ booking.pets ? 'Sí' : 'No' }}</dd>
@@ -185,10 +185,10 @@
                 <dt>Nombre completo</dt><dd>{{ booking.first_name }} {{ booking.first_surname }} {{ booking.second_surname }}</dd>
                 <dt>DNI indicado</dt><dd>{{ booking.precheckin_identity_document }}</dd>
                 <dt>Documento</dt><dd>{{ booking.document_type }} · {{ booking.document_support_number }}</dd>
-                <dt>Nacimiento</dt><dd>{{ booking.birth_date | date: 'dd/MM/yyyy' : 'UTC' }}</dd>
+                <dt>Nacimiento</dt><dd>{{ booking.birth_date | date: 'dd/MM/yyyy' }}</dd>
                 <dt>Sexo / nacionalidad</dt><dd>{{ booking.sex }} · {{ booking.nationality }}</dd>
                 <dt>Dirección</dt><dd>{{ booking.home_address }}, {{ booking.home_city }}, {{ booking.home_country }}</dd>
-                <dt>Expedición / caducidad</dt><dd>{{ booking.document_issue_date | date: 'dd/MM/yyyy' : 'UTC' }} · {{ booking.document_expiry_date | date: 'dd/MM/yyyy' : 'UTC' }}</dd>
+                <dt>Expedición / caducidad</dt><dd>{{ booking.document_issue_date | date: 'dd/MM/yyyy' }} · {{ booking.document_expiry_date | date: 'dd/MM/yyyy' }}</dd>
                 <dt>Teléfono móvil</dt><dd>{{ booking.phone_mobile }}</dd>
                 <dt>Email pre-check-in</dt><dd>{{ booking.precheckin_email }}</dd>
                 <dt>Viajeros</dt><dd>{{ booking.traveler_count }}</dd>

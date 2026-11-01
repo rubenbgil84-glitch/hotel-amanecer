@@ -128,12 +128,27 @@
               <small>Se mostrarán en las tarjetas de habitaciones, reservas y correo de confirmación.</small>
             </label>
             <label class="image-field">
-              Imagen de la habitación
-              <input type="file" accept="image/jpeg,image/png,image/webp" (change)="selectImage($event)" />
-              <small>JPG, PNG o WebP · máximo 5 MB. Al guardar, reemplazará la imagen actual.</small>
-              @if (imagePreview()) {
-                <img class="image-preview" [src]="imagePreview()" alt="Vista previa de la habitación" />
-              }
+              Fotos de la habitación
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple (change)="selectImage($event)" />
+              <small>JPG, PNG o WebP · máximo 5 MB cada una y 10 fotos por alojamiento. Las fotos nuevas se añadirán al guardar.</small>
+              <div class="image-gallery-editor">
+                @for (image of existingImages(); track image.id) {
+                  @if (!removedImageIds().includes(image.id)) {
+                    <figure>
+                      <img class="image-preview" [src]="image.image_url" alt="Foto de la habitación" />
+                      @if (image.id > 0) {
+                        <button type="button" class="quiet-button" (click)="removeExistingImage(image.id)">Quitar foto</button>
+                      }
+                    </figure>
+                  }
+                }
+                @for (image of newImagePreviews(); track $index) {
+                  <figure>
+                    <img class="image-preview" [src]="image" alt="Nueva foto seleccionada" />
+                    <button type="button" class="quiet-button" (click)="removeNewImage($index)">Quitar foto</button>
+                  </figure>
+                }
+              </div>
             </label>
             <label class="active-field">
               <input type="checkbox" formControlName="is_active" />
@@ -181,7 +196,7 @@
                   @for (block of room.availability_blocks; track block.id) {
                     <li>
                       <div class="block-dates">
-                        <strong>{{ block.start_date | date: 'dd/MM/yyyy' : 'UTC' }} – {{ block.end_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong>
+                        <strong>{{ block.start_date | date: 'dd/MM/yyyy' }} – {{ block.end_date | date: 'dd/MM/yyyy' }}</strong>
                         <span>{{ block.reason || 'Sin motivo indicado' }}</span>
                       </div>
                       <div class="block-actions">

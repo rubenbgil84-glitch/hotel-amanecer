@@ -63,7 +63,7 @@
               <ul class="excluded-list">
                 @for (range of excludedDates(); track $index) {
                   <li>
-                    <span>{{ range.start_date | date: 'dd/MM/yyyy' : 'UTC' }} – {{ range.end_date | date: 'dd/MM/yyyy' : 'UTC' }}</span>
+                    <span>{{ range.start_date | date: 'dd/MM/yyyy' }} – {{ range.end_date | date: 'dd/MM/yyyy' }}</span>
                     <button type="button" class="text-button" (click)="removeExcludedDate($index)">Eliminar</button>
                   </li>
                 }
@@ -91,7 +91,7 @@
               <tr>
                 <td><strong>{{ code.code }}</strong><small>{{ code.excluded_dates.length }} periodo(s) excluido(s)</small></td>
                 <td>{{ code.discount_percent }}%</td>
-                <td>{{ code.starts_on ? (code.starts_on | date: 'dd/MM/yyyy' : 'UTC') : 'Sin inicio' }} – {{ code.ends_on ? (code.ends_on | date: 'dd/MM/yyyy' : 'UTC') : 'Sin fin' }}</td>
+                <td>{{ code.starts_on ? (code.starts_on | date: 'dd/MM/yyyy') : 'Sin inicio' }} – {{ code.ends_on ? (code.ends_on | date: 'dd/MM/yyyy') : 'Sin fin' }}</td>
                 <td>{{ code.minimum_amount | currency: 'EUR' }}</td>
                 <td>{{ code.usage_count }} / {{ code.max_uses ?? '∞' }}</td>
                 <td><span class="status-badge" [class.inactive]="!code.is_active">{{ code.is_active ? 'Activo' : 'Desactivado' }}</span></td>
@@ -141,7 +141,7 @@
                     [checked]="selectedRecipientEmails().includes(recipient.email)"
                     (change)="toggleRecipient(recipient.email, $event)" />
                   <span><strong>{{ recipient.guest_name }}</strong><small>{{ recipient.email }}</small></span>
-                  <time [attr.datetime]="recipient.check_in">{{ recipient.check_in | date: 'dd/MM/yyyy' : 'UTC' }}</time>
+                  <time [attr.datetime]="recipient.check_in">{{ recipient.check_in | date: 'dd/MM/yyyy' }}</time>
                 </label>
               }
             </div>

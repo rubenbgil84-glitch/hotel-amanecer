@@ -25,6 +25,9 @@ export class AdministracionHabitaciones {
   readonly notice = signal('');
   readonly editingId = signal<number | null | 'new'>(null);
   readonly imagePreview = signal<string | null>(null);
+  readonly existingImages = signal<NonNullable<AdminRoom['images']>>([]);
+  readonly newImagePreviews = signal<string[]>([]);
+  readonly removedImageIds = signal<number[]>([]);
   readonly editingBlockId = signal<number | null>(null);
   readonly selectedRoomIds = signal<number[]>([]);
   readonly selectedRoomCount = computed(() => this.selectedRoomIds().length);
@@ -37,7 +40,7 @@ export class AdministracionHabitaciones {
     const roomCount = this.standardRooms().length;
     return selectedCount > 0 && selectedCount < roomCount;
   });
-  private imageDataUrl: string | null = null;
+  private imageDataUrls: string[] = [];
 
   readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.minLength(2), Validators.maxLength(100)]],
@@ -89,7 +92,10 @@ export class AdministracionHabitaciones {
   startCreate(): void {
     this.clearMessages();
     this.editingId.set('new');
-    this.imageDataUrl = null;
+    this.imageDataUrls = [];
+    this.existingImages.set([]);
+    this.newImagePreviews.set([]);
+    this.removedImageIds.set([]);
     this.imagePreview.set(null);
     this.form.reset({
       name: '', description: '', pricing_type: 'standard', catalog_category: 'Habitación doble', price_per_night: 90,
@@ -102,8 +108,11 @@ export class AdministracionHabitaciones {
   startEdit(room: AdminRoom): void {
     this.clearMessages();
     this.editingId.set(room.id);
-    this.imageDataUrl = null;
+    this.imageDataUrls = [];
     this.imagePreview.set(room.image_url);
+    this.existingImages.set(room.images?.length ? room.images : room.image_url ? [{id: 0, image_url: room.image_url, position: 0}] : []);
+    this.newImagePreviews.set([]);
+    this.removedImageIds.set([]);
     this.form.reset({
       name: room.name,
       description: room.description,
@@ -130,39 +139,48 @@ export class AdministracionHabitaciones {
 
   cancelEdit(): void {
     this.editingId.set(null);
-    this.imageDataUrl = null;
+    this.imageDataUrls = [];
     this.imagePreview.set(null);
+    this.existingImages.set([]);
+    this.newImagePreviews.set([]);
+    this.removedImageIds.set([]);
     this.clearMessages();
   }
 
-  selectImage(event: Event): void {
-    const file = (event.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
-      this.imageDataUrl = null;
-      this.imagePreview.set(this.editingId() === 'new'
-        ? null
-        : this.rooms()?.find((room) => room.id === this.editingId())?.image_url ?? null);
-      this.error.set('Selecciona una imagen JPG, PNG o WebP de hasta 5 MB.');
+  async selectImage(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    if (!files.length) return;
+    if (files.some((file) => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024)
+      || this.existingImages().length - this.removedImageIds().length + this.imageDataUrls.length + files.length > 10) {
+      this.error.set('Selecciona hasta 10 imágenes JPG, PNG o WebP de hasta 5 MB cada una.');
+      input.value = '';
       return;
     }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result !== 'string') {
-        this.imageDataUrl = null;
-        this.error.set('No se pudo leer la imagen seleccionada.');
-        return;
-      }
-      this.imageDataUrl = reader.result;
-      this.imagePreview.set(reader.result);
+    try {
+      const encoded = await Promise.all(files.map((file) => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('No se pudo leer una imagen.'));
+        reader.onerror = () => reject(new Error('No se pudo leer una imagen.'));
+        reader.readAsDataURL(file);
+      })));
+      this.imageDataUrls.push(...encoded);
+      this.newImagePreviews.update((images) => [...images, ...encoded]);
       this.error.set('');
-    };
-    reader.onerror = () => {
-      this.imageDataUrl = null;
-      this.error.set('No se pudo leer la imagen seleccionada.');
-    };
-    reader.readAsDataURL(file);
+    } catch {
+      this.error.set('No se pudieron leer las imágenes seleccionadas.');
+    }
+    input.value = '';
+  }
+
+  removeExistingImage(id: number): void {
+    if (id === 0) return;
+    this.removedImageIds.update((ids) => [...new Set([...ids, id])]);
+  }
+
+  removeNewImage(index: number): void {
+    this.imageDataUrls.splice(index, 1);
+    this.newImagePreviews.update((images) => images.filter((_image, imageIndex) => imageIndex !== index));
   }
 
   saveRoom(): void {
@@ -191,7 +209,8 @@ export class AdministracionHabitaciones {
       capacity: Number(values.capacity),
       features: values.features.split('\n').map((feature) => feature.trim()).filter(Boolean),
       is_active: values.is_active,
-      ...(this.imageDataUrl ? { image_data_url: this.imageDataUrl } : {}),
+      ...(this.imageDataUrls.length ? { image_data_urls: this.imageDataUrls } : {}),
+      ...(this.removedImageIds().length ? { remove_image_ids: this.removedImageIds() } : {}),
     };
     this.saving.set(true);
     const roomId = this.editingId();
@@ -202,7 +221,7 @@ export class AdministracionHabitaciones {
       next: () => {
         this.saving.set(false);
         this.editingId.set(null);
-        this.imageDataUrl = null;
+        this.imageDataUrls = [];
         this.notice.set(roomId === 'new' ? 'Habitación creada.' : 'Cambios guardados.');
         this.loadRooms();
       },

@@ -90,7 +90,7 @@
             @for (booking of bookings(); track booking.id) {
               <tr>
                 <td><strong>{{ booking.guest_name }}</strong><small>{{ booking.room_name }}</small></td>
-                <td>{{ booking.check_in | date: 'dd/MM/yyyy' : 'UTC' }}<small>hasta {{ booking.check_out | date: 'dd/MM/yyyy' : 'UTC' }}</small></td>
+                <td>{{ booking.check_in | date: 'dd/MM/yyyy' }}<small>hasta {{ booking.check_out | date: 'dd/MM/yyyy' }}</small></td>
                 <td>{{ booking.adults }} adultos · {{ booking.children }} niños</td>
                 <td><code>{{ booking.reservation_code }}</code></td>
                 <td>

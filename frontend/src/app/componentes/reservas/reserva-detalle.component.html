@@ -21,8 +21,8 @@
           <div><span>Correo electrónico</span><strong>{{ booking()!.email }}</strong></div>
           <div><span>Teléfono</span><strong>{{ booking()!.phone }}</strong></div>
           <div><span>Reserva realizada</span><strong>{{ booking()!.created_at | date: 'dd/MM/yyyy HH:mm' }}</strong></div>
-          <div><span>Entrada</span><strong>{{ booking()!.check_in | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
-          <div><span>Salida</span><strong>{{ booking()!.check_out | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+          <div><span>Entrada</span><strong>{{ booking()!.check_in | date: 'dd/MM/yyyy' }}</strong></div>
+          <div><span>Salida</span><strong>{{ booking()!.check_out | date: 'dd/MM/yyyy' }}</strong></div>
           <div>
             <span>Huéspedes</span>
             <strong>
@@ -91,7 +91,7 @@
               <div><span>Número de soporte</span><strong>{{ booking()!.document_support_number }}</strong></div>
             }
             @if (booking()!.birth_date) {
-              <div><span>Fecha de nacimiento</span><strong>{{ booking()!.birth_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+              <div><span>Fecha de nacimiento</span><strong>{{ booking()!.birth_date | date: 'dd/MM/yyyy' }}</strong></div>
             }
             @if (booking()!.sex) {
               <div><span>Sexo</span><strong>{{ sexLabel(booking()!.sex) }}</strong></div>
@@ -100,10 +100,10 @@
               <div><span>Nacionalidad</span><strong>{{ booking()!.nationality }}</strong></div>
             }
             @if (booking()!.document_issue_date) {
-              <div><span>Expedición del documento</span><strong>{{ booking()!.document_issue_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+              <div><span>Expedición del documento</span><strong>{{ booking()!.document_issue_date | date: 'dd/MM/yyyy' }}</strong></div>
             }
             @if (booking()!.document_expiry_date) {
-              <div><span>Caducidad del documento</span><strong>{{ booking()!.document_expiry_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong></div>
+              <div><span>Caducidad del documento</span><strong>{{ booking()!.document_expiry_date | date: 'dd/MM/yyyy' }}</strong></div>
             }
             @if (booking()!.home_address) {
               <div class="full-width"><span>Dirección</span><strong>{{ booking()!.home_address }}</strong></div>

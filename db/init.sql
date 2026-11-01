@@ -15,6 +15,16 @@ CREATE TABLE rooms (
   is_active       BOOLEAN NOT NULL DEFAULT TRUE
 );
 
+CREATE TABLE room_images (
+  id SERIAL PRIMARY KEY,
+  room_id INT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+  object_path TEXT NOT NULL UNIQUE,
+  image_url TEXT NOT NULL,
+  position INT NOT NULL DEFAULT 0 CHECK (position >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX room_images_room_position_idx ON room_images(room_id, position, id);
+
 CREATE TABLE bookings (
   id          SERIAL PRIMARY KEY,
   room_id     INT NOT NULL REFERENCES rooms(id),

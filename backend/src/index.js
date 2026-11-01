@@ -18,12 +18,23 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import PDFDocument from "pdfkit";
 import sharp from "sharp";
+import {
+  downloadStorageObject,
+  publicStorageUrl,
+  removeStorageObjects,
+  storageBuckets,
+  uploadStorageObject,
+} from "./supabase-storage.js";
 import {calculateBookingPrice, calculateDiscount} from "./booking-pricing.js";
 import {
   calculateVatBreakdown,
   normalizeLegacyVatAmounts,
 } from "./booking-vat.js";
 import {buildSesHospedajesXml} from "./ses-hospedajes-xml.js";
+
+// PostgreSQL DATE values represent calendar dates, not instants. Keep them as
+// YYYY-MM-DD strings so JSON serialization cannot shift them by the server TZ.
+pg.types.setTypeParser(pg.types.builtins.DATE, (value) => value);
 
 const {
   BACKEND_PORT = "4000",
@@ -87,11 +98,11 @@ const siteSettingDefaults = {
   hero_description:
     "Encuentra tu pausa en un hotel pensado para disfrutar sin mirar el reloj.",
   hero_link_label: "Explora las habitaciones",
-  hero_image_path: "/api/web-images/hotel.png",
+  hero_image_path: publicStorageUrl("site/hotel.png"),
   promise_1: "Descanso sin prisas",
   promise_2: "Espacios con personalidad",
   promise_3: "Atención cercana",
-  intro_image_path: "/api/web-images/hotel.png",
+  intro_image_path: publicStorageUrl("site/hotel.png"),
   intro_image_alt:
     "Interior cálido y luminoso, con materiales naturales y detalles cuidados",
   intro_note_top: "Tu tiempo,",
@@ -101,7 +112,7 @@ const siteSettingDefaults = {
   intro_description:
     "Hemos creado un lugar sereno al que llegar, dejar las maletas y empezar a disfrutar. Cada detalle está pensado para que te sientas a gusto desde el primer momento.",
   intro_link_label: "Conoce el hotel",
-  experience_image_path: "/api/web-images/hotel.png",
+  experience_image_path: publicStorageUrl("site/hotel.png"),
   experience_image_alt:
     "Una habitación acogedora bañada por la luz de la tarde",
   experience_eyebrow: "Pequeños detalles, grandes días",
@@ -503,6 +514,17 @@ const decodeDocumentImage = (dataUrl) => {
   return {buffer, extension: match[1] === "jpeg" ? "jpg" : match[1]};
 };
 const decodeRoomImage = decodeDocumentImage;
+function isAllowedSiteImageUrl(value) {
+  if (/^\/api\/web-images\/(?:hotel\.png|(?:hero|intro|experience|casa-rural)\.webp)$/.test(value)) return true;
+  try {
+    const url = new URL(value);
+    if (url.origin !== process.env.SUPABASE_URL) return false;
+    const prefix = `/storage/v1/object/public/${storageBuckets.public}/site/`;
+    return url.pathname.startsWith(prefix) && /^(?:[0-9a-f-]{36}-)?(?:hotel\.png|(?:hero|intro|experience|casa-rural)\.webp)$/.test(url.pathname.slice(prefix.length));
+  } catch {
+    return false;
+  }
+}
 const slugifyRoomName = (name) =>
   name
     .normalize("NFD")
@@ -1310,10 +1332,7 @@ app.put("/api/admin/site-settings", requireAdmin, async (req, res, next) => {
       (key.startsWith("reception_") &&
         key.endsWith("_time") &&
         !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) ||
-      (key.endsWith("_image_path") &&
-        !/^\/api\/web-images\/(?:hotel\.png|(?:hero|intro|experience)\.webp)$/.test(
-          value,
-        ))
+      (key.endsWith("_image_path") && !isAllowedSiteImageUrl(value))
     ) {
       errors.push(`El campo "${key}" no es válido.`);
       continue;
@@ -1439,11 +1458,7 @@ app.put("/api/admin/site-settings", requireAdmin, async (req, res, next) => {
     await client.query("ROLLBACK").catch(() => {});
     for (const saved of settingsCommitted ? [] : savedImages) {
       try {
-        if (saved.previousImage) {
-          await writeFile(saved.imagePath, saved.previousImage, {mode: 0o644});
-        } else {
-          await rm(saved.imagePath, {force: true});
-        }
+        await removeStorageObjects(storageBuckets.public, [saved.objectPath]);
       } catch (restoreError) {
         console.error(
           "No se pudo restaurar una imagen de la web tras fallar el guardado.",
@@ -1516,7 +1531,10 @@ app.patch(
 app.get("/api/admin/closures", requireAdmin, async (req, res, next) => {
   try {
     const {rows} = await pool.query(
-      `SELECT id, start_date, end_date, reason
+      `SELECT id,
+              to_char(start_date, 'YYYY-MM-DD') AS start_date,
+              to_char(end_date, 'YYYY-MM-DD') AS end_date,
+              reason
          FROM site_closures
         WHERE end_date >= CURRENT_DATE
           AND ($1::boolean = FALSE OR start_date > CURRENT_DATE)
@@ -1533,7 +1551,10 @@ app.get("/api/admin/closures", requireAdmin, async (req, res, next) => {
 app.get("/api/closures/upcoming", async (req, res, next) => {
   try {
     const {rows} = await pool.query(
-      `SELECT id, start_date, end_date, reason
+      `SELECT id,
+              to_char(start_date, 'YYYY-MM-DD') AS start_date,
+              to_char(end_date, 'YYYY-MM-DD') AS end_date,
+              reason
          FROM site_closures
         WHERE start_date >= CURRENT_DATE
           AND end_date >= CURRENT_DATE
@@ -2010,7 +2031,9 @@ app.get("/api/rooms", async (_req, res, next) => {
               pricing_type, catalog_category, single_price::float8 AS single_price,
               double_price::float8 AS double_price,
               extra_bed_price::float8 AS extra_bed_price,
-              capacity, features, image_url, is_active
+              capacity, features, image_url, is_active,
+              COALESCE((SELECT json_agg(json_build_object('id', ri.id, 'image_url', ri.image_url, 'position', ri.position)
+                ORDER BY ri.position, ri.id) FROM room_images ri WHERE ri.room_id = rooms.id), '[]'::json) AS images
          FROM rooms WHERE is_active = TRUE ORDER BY price_per_night DESC`,
     );
     res.json(rows);
@@ -2050,7 +2073,16 @@ function toDateOnly(value) {
   if (!isDate(date)) throw new RangeError("Fecha de reserva no válida.");
   return date;
 }
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Madrid",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type) => parts.find((entry) => entry.type === type)?.value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
 
 async function findActiveClosure(checkIn, checkOut, queryable = pool) {
   const {rows} = await queryable.query(
@@ -2100,6 +2132,21 @@ function safePrecheckinFilePath(storedPath) {
   return filePath;
 }
 
+function safePrecheckinObjectPath(storedPath) {
+  if (typeof storedPath !== "string" || !storedPath.startsWith("storage:")) return null;
+  const objectPath = storedPath.slice("storage:".length);
+  if (!objectPath.startsWith("pre-checking/") || objectPath.split("/").some((part) => !part || part === "." || part === "..")) return null;
+  return objectPath;
+}
+
+async function readPrecheckinDocument(storedPath) {
+  const objectPath = safePrecheckinObjectPath(storedPath);
+  if (objectPath) return downloadStorageObject(storageBuckets.private, objectPath);
+  const filePath = safePrecheckinFilePath(storedPath);
+  if (!filePath) throw new Error("La ruta del documento de pre-check-in no es válida.");
+  return readFile(filePath);
+}
+
 async function removePrecheckinDocuments(paths) {
   const uniquePaths = [
     ...new Set(paths.filter((path) => typeof path === "string")),
@@ -2115,7 +2162,13 @@ async function removePrecheckinDocuments(paths) {
     if (!rowCount) unreferencedPaths.push(storedPath);
   }
   const directories = new Set();
+  const cloudObjects = [];
   for (const storedPath of unreferencedPaths) {
+    const objectPath = safePrecheckinObjectPath(storedPath);
+    if (objectPath) {
+      cloudObjects.push(objectPath);
+      continue;
+    }
     const filePath = safePrecheckinFilePath(storedPath);
     if (!filePath) continue;
     await rm(filePath, {force: true});
@@ -2128,6 +2181,7 @@ async function removePrecheckinDocuments(paths) {
       if (error.code !== "ENOTEMPTY") throw error;
     }
   }
+  await removeStorageObjects(storageBuckets.private, cloudObjects);
 }
 
 const adminBookingFields = `
@@ -2323,12 +2377,7 @@ async function createBookingPdf(booking, {includePrecheckin = true} = {}) {
       : []),
   ]) {
     if (!storedPath) continue;
-    const filePath = safePrecheckinFilePath(storedPath);
-    if (!filePath)
-      throw new Error(
-        `La ruta del documento de la reserva ${booking.reservation_code} no es válida.`,
-      );
-    let image = await readFile(filePath);
+    let image = await readPrecheckinDocument(storedPath);
     if (image.toString("ascii", 8, 12) === "WEBP") {
       image = await sharp(image).png().toBuffer();
     }
@@ -2716,13 +2765,7 @@ async function createPrecheckinPdf(booking) {
     ["Documento de identidad · reverso", booking.document_back_path],
   ]) {
     if (!storedPath) continue;
-    const filePath = safePrecheckinFilePath(storedPath);
-    if (!filePath) {
-      throw new Error(
-        `La ruta del documento de la reserva ${booking.reservation_code} no es válida.`,
-      );
-    }
-    const image = await readFile(filePath);
+    const image = await readPrecheckinDocument(storedPath);
     const optimizedImage = await sharp(image)
       .rotate()
       .resize({
@@ -3768,14 +3811,15 @@ app.get(
         `SELECT ${field} AS document_path FROM pre_checkings WHERE booking_id = $1`,
         [bookingId],
       );
-      const filePath = safePrecheckinFilePath(rows[0]?.document_path);
-      if (!filePath)
+      const storedPath = rows[0]?.document_path;
+      if (!safePrecheckinObjectPath(storedPath) && !safePrecheckinFilePath(storedPath))
         return res
           .status(404)
           .json({errors: ["No se ha encontrado el documento."]});
-      res.set("Cache-Control", "no-store").sendFile(filePath, (error) => {
-        if (error && !res.headersSent) next(error);
-      });
+      const file = await readPrecheckinDocument(storedPath);
+      const contentType = file.toString("ascii", 0, 4) === "RIFF" ? "image/webp"
+        : file.toString("ascii", 1, 4) === "PNG" ? "image/png" : "image/jpeg";
+      res.set("Cache-Control", "no-store").type(contentType).send(file);
     } catch (error) {
       next(error);
     }
@@ -4166,7 +4210,9 @@ app.get("/api/admin/rooms", requireAdmin, async (_req, res, next) => {
                 pricing_type, catalog_category, single_price::float8 AS single_price,
                 double_price::float8 AS double_price,
                 extra_bed_price::float8 AS extra_bed_price,
-                capacity, features, image_url, is_active
+                capacity, features, image_url, is_active,
+                COALESCE((SELECT json_agg(json_build_object('id', ri.id, 'image_url', ri.image_url, 'position', ri.position)
+                  ORDER BY ri.position, ri.id) FROM room_images ri WHERE ri.room_id = rooms.id), '[]'::json) AS images
            FROM rooms ORDER BY name`,
       ),
       pool.query(
@@ -4276,35 +4322,18 @@ function validateRoomInput(body) {
 async function saveRoomImage(slug, imageDataUrl) {
   const image = decodeRoomImage(imageDataUrl);
   if (!image) return null;
-  const directory = join(roomImageStorageRoot, slug);
-  await mkdir(directory, {recursive: true, mode: 0o755});
-  const imagePath = join(directory, `habitacion.${image.extension}`);
-  let previousImage = null;
-  try {
-    previousImage = await readFile(imagePath);
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-  await writeFile(imagePath, image.buffer, {mode: 0o644});
+  const objectPath = `rooms/${slug}/${randomUUID()}.webp`;
+  const optimized = await sharp(image.buffer).rotate().resize({width: 2400, height: 1600, fit: "inside", withoutEnlargement: true}).webp({quality: 82}).toBuffer();
+  await uploadStorageObject(storageBuckets.public, objectPath, optimized, "image/webp");
   return {
-    imageUrl: `/api/room-images/${slug}/habitacion.${image.extension}`,
-    imagePath,
-    previousImage,
-    directory,
+    imageUrl: publicStorageUrl(objectPath),
+    objectPath,
   };
 }
 
 async function saveWebImage(filename, imageDataUrl) {
   const image = decodeRoomImage(imageDataUrl);
   if (!image) throw new Error("La imagen enviada no es válida.");
-  await mkdir(webImageStorageRoot, {recursive: true, mode: 0o755});
-  const imagePath = join(webImageStorageRoot, filename);
-  let previousImage = null;
-  try {
-    previousImage = await readFile(imagePath);
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
   const optimizedImage = await sharp(image.buffer)
     .rotate()
     .resize({
@@ -4315,18 +4344,11 @@ async function saveWebImage(filename, imageDataUrl) {
     })
     .webp({quality: 82})
     .toBuffer();
-  const temporaryPath = `${imagePath}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporaryPath, optimizedImage, {mode: 0o644});
-    await rename(temporaryPath, imagePath);
-  } catch (error) {
-    await rm(temporaryPath, {force: true});
-    throw error;
-  }
+  const objectPath = `site/${randomUUID()}-${filename}`;
+  await uploadStorageObject(storageBuckets.public, objectPath, optimizedImage, "image/webp");
   return {
-    imageUrl: `/api/web-images/${filename}`,
-    imagePath,
-    previousImage,
+    imageUrl: publicStorageUrl(objectPath),
+    objectPath,
   };
 }
 
@@ -4930,14 +4952,16 @@ app.post("/api/admin/rooms", requireAdmin, async (req, res, next) => {
   const slug =
     typeof body.name === "string" ? slugifyRoomName(body.name.trim()) : "";
   if (!slug) errors.push("El nombre no genera un identificador válido.");
-  const image =
-    body.image_data_url == null ? null : decodeRoomImage(body.image_data_url);
-  if (body.image_data_url != null && !image)
-    errors.push("La imagen debe ser JPG, PNG o WebP y no superar los 5 MB.");
+  const imageDataUrls = Array.isArray(body.image_data_urls)
+    ? body.image_data_urls
+    : body.image_data_url ? [body.image_data_url] : [];
+  const decodedImages = imageDataUrls.map(decodeRoomImage);
+  if (imageDataUrls.length > 10 || decodedImages.some((image) => !image))
+    errors.push("Selecciona hasta 10 imágenes JPG, PNG o WebP de hasta 5 MB cada una.");
   if (errors.length) return res.status(400).json({errors});
 
   let roomId = null;
-  let savedImage = null;
+  const savedImages = [];
   try {
     const {rows} = await pool.query(
       `INSERT INTO rooms (name, slug, description, price_per_night, pricing_type,
@@ -4967,8 +4991,9 @@ app.post("/api/admin/rooms", requireAdmin, async (req, res, next) => {
       ],
     );
     roomId = rows[0].id;
-    if (image) {
-      savedImage = await saveRoomImage(slug, body.image_data_url);
+    if (decodedImages.length) {
+      for (const dataUrl of imageDataUrls) savedImages.push(await saveRoomImage(slug, dataUrl));
+      const savedImage = savedImages[0];
       const {rows: updatedRows} = await pool.query(
         `UPDATE rooms SET image_url = $2
           WHERE id = $1
@@ -4978,6 +5003,12 @@ app.post("/api/admin/rooms", requireAdmin, async (req, res, next) => {
                     capacity, features, image_url, is_active`,
         [roomId, savedImage.imageUrl],
       );
+      for (const [position, image] of savedImages.entries()) {
+        await pool.query(
+          "INSERT INTO room_images (room_id, object_path, image_url, position) VALUES ($1, $2, $3, $4)",
+          [roomId, image.objectPath, image.imageUrl, position],
+        );
+      }
       res.status(201).json({...updatedRows[0], availability_blocks: []});
     } else {
       res.status(201).json({...rows[0], availability_blocks: []});
@@ -4985,8 +5016,7 @@ app.post("/api/admin/rooms", requireAdmin, async (req, res, next) => {
   } catch (error) {
     if (roomId !== null)
       await pool.query("DELETE FROM rooms WHERE id = $1", [roomId]);
-    if (savedImage)
-      await rm(savedImage.directory, {recursive: true, force: true});
+    await Promise.allSettled(savedImages.map((image) => removeStorageObjects(storageBuckets.public, [image.objectPath])));
     if (error.code === "23505") {
       return res.status(409).json({
         errors: ["Ya existe una habitación con un nombre equivalente."],
@@ -5002,13 +5032,18 @@ app.put("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
     return res.status(400).json({errors: ["La habitación no es válida."]});
   const body = req.body ?? {};
   const errors = validateRoomInput(body);
-  const hasImage = body.image_data_url != null;
-  const image = hasImage ? decodeRoomImage(body.image_data_url) : null;
-  if (hasImage && !image)
-    errors.push("La imagen debe ser JPG, PNG o WebP y no superar los 5 MB.");
+  const imageDataUrls = Array.isArray(body.image_data_urls)
+    ? body.image_data_urls
+    : body.image_data_url ? [body.image_data_url] : [];
+  const decodedImages = imageDataUrls.map(decodeRoomImage);
+  const removeImageIds = Array.isArray(body.remove_image_ids) ? body.remove_image_ids : [];
+  if (imageDataUrls.length > 10 || decodedImages.some((image) => !image))
+    errors.push("Selecciona hasta 10 imágenes JPG, PNG o WebP de hasta 5 MB cada una.");
+  if (removeImageIds.some((id) => !Number.isInteger(id) || id < 1))
+    errors.push("La selección de fotos para eliminar no es válida.");
   if (errors.length) return res.status(400).json({errors});
 
-  let savedImage = null;
+  const savedImages = [];
   try {
     const {rows: existingRows} = await pool.query(
       "SELECT id, slug, image_url FROM rooms WHERE id = $1",
@@ -5019,9 +5054,15 @@ app.put("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
       return res
         .status(404)
         .json({errors: ["No se ha encontrado la habitación."]});
-    if (image)
-      savedImage = await saveRoomImage(existing.slug, body.image_data_url);
-    const imageUrl = savedImage?.imageUrl ?? existing.image_url;
+    for (const dataUrl of imageDataUrls) savedImages.push(await saveRoomImage(existing.slug, dataUrl));
+    const {rows: currentImages} = await pool.query(
+      "SELECT id, object_path, image_url, position FROM room_images WHERE room_id = $1 ORDER BY position, id",
+      [roomId],
+    );
+    const removedImages = currentImages.filter((image) => removeImageIds.includes(image.id));
+    const keptImages = currentImages.filter((image) => !removeImageIds.includes(image.id));
+    const mergedImages = [...keptImages, ...savedImages.map((image) => ({...image, id: null}))];
+    const imageUrl = mergedImages[0]?.image_url ?? (currentImages.length ? null : existing.image_url);
     const {rows} = await pool.query(
       `UPDATE rooms
           SET name = $2, description = $3, price_per_night = $4, pricing_type = $5,
@@ -5051,15 +5092,20 @@ app.put("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
         body.is_active ?? true,
       ],
     );
-    if (savedImage)
-      await removeOldRoomImageFiles(savedImage.directory, savedImage.imagePath);
+    for (const image of savedImages) {
+      await pool.query(
+        "INSERT INTO room_images (room_id, object_path, image_url, position) VALUES ($1, $2, $3, $4)",
+        [roomId, image.objectPath, image.imageUrl, mergedImages.findIndex((entry) => entry.objectPath === image.objectPath)],
+      );
+    }
+    if (removeImageIds.length) {
+      await pool.query("DELETE FROM room_images WHERE room_id = $1 AND id = ANY($2::bigint[])", [roomId, removeImageIds]);
+      await removeStorageObjects(storageBuckets.public, removedImages.map((image) => image.object_path));
+    }
+    await pool.query("UPDATE room_images SET position = position WHERE room_id = $1", [roomId]);
     res.json({...rows[0]});
   } catch (error) {
-    if (savedImage) {
-      if (savedImage.previousImage)
-        await writeFile(savedImage.imagePath, savedImage.previousImage);
-      else await rm(savedImage.imagePath, {force: true});
-    }
+    await Promise.allSettled(savedImages.map((image) => removeStorageObjects(storageBuckets.public, [image.objectPath])));
     if (error.code === "23505") {
       return res.status(409).json({
         errors: ["Ya existe una habitación con un nombre equivalente."],
@@ -5074,6 +5120,10 @@ app.delete("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
   if (!Number.isInteger(roomId) || roomId < 1)
     return res.status(400).json({errors: ["La habitación no es válida."]});
   try {
+    const {rows: roomImages} = await pool.query(
+      "SELECT object_path FROM room_images WHERE room_id = $1",
+      [roomId],
+    );
     const {rows} = await pool.query(
       "DELETE FROM rooms WHERE id = $1 RETURNING slug",
       [roomId],
@@ -5082,6 +5132,7 @@ app.delete("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
       return res
         .status(404)
         .json({errors: ["No se ha encontrado la habitación."]});
+    await removeStorageObjects(storageBuckets.public, roomImages.map((image) => image.object_path));
     await rm(join(roomImageStorageRoot, rows[0].slug), {
       recursive: true,
       force: true,
@@ -5156,6 +5207,13 @@ app.post("/api/admin/rooms/bulk", requireAdmin, async (req, res, next) => {
       return res.json({updated: rowCount});
     }
 
+    const {rows: imageObjects} = await pool.query(
+      `SELECT ri.room_id, ri.object_path FROM room_images ri
+        JOIN rooms r ON r.id = ri.room_id
+        WHERE r.id = ANY($1::int[]) AND r.pricing_type = 'standard'
+          AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.room_id = r.id)`,
+      [ids],
+    );
     const {rows: deleted} = await pool.query(
       `DELETE FROM rooms r
         WHERE r.id = ANY($1::int[])
@@ -5187,6 +5245,10 @@ app.post("/api/admin/rooms/bulk", requireAdmin, async (req, res, next) => {
         }),
       ),
     );
+    const deletedSet = new Set(deletedIds);
+    await removeStorageObjects(storageBuckets.public, imageObjects
+      .filter((image) => deletedSet.has(image.room_id))
+      .map((image) => image.object_path));
     res.json({
       deleted: deletedIds,
       retained: retained.map(({id, name}) => ({id, name})),
@@ -5866,7 +5928,7 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
   if (errors.length) return res.status(400).json({errors});
 
   const client = await pool.connect();
-  const documentFileSnapshots = new Map();
+  const uploadedDocumentPaths = [];
   let databaseCommitted = false;
   try {
     await client.query("BEGIN");
@@ -5928,7 +5990,7 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
         .json({errors: ["Indica el parentesco de los menores."]});
     }
     if (
-      data.document_expiry_date < booking.check_in.toISOString().slice(0, 10)
+      data.document_expiry_date < toDateOnly(booking.check_in)
     ) {
       await client.query("ROLLBACK");
       return res.status(400).json({
@@ -5940,52 +6002,19 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
     const year = String(now.getFullYear());
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const storageDirectory = String(booking.booking_id);
-    const documentDirectoryPath = join(
-      documentStorageRoot,
-      year,
-      month,
-      storageDirectory,
-    );
-    await mkdir(documentDirectoryPath, {recursive: true, mode: 0o700});
-    await chmod(documentDirectoryPath, 0o700);
-
-    const saveDocumentFile = async (filePath, buffer) => {
-      try {
-        documentFileSnapshots.set(filePath, await readFile(filePath));
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-        documentFileSnapshots.set(filePath, null);
-      }
-      await writeFile(filePath, buffer, {mode: 0o600});
-      await chmod(filePath, 0o600);
+    const saveDocumentFile = async (filename, buffer, contentType) => {
+      const objectPath = `pre-checking/${year}/${month}/${storageDirectory}/${randomUUID()}-${filename}`;
+      await uploadStorageObject(storageBuckets.private, objectPath, buffer, contentType);
+      uploadedDocumentPaths.push(objectPath);
+      return `storage:${objectPath}`;
     };
     const frontFilename = `frontal.${frontImage.extension}`;
-    const frontFilePath = join(documentDirectoryPath, frontFilename);
-    await saveDocumentFile(frontFilePath, frontImage.buffer);
+    const frontDocumentPath = await saveDocumentFile(frontFilename, frontImage.buffer, `image/${frontImage.extension === "jpg" ? "jpeg" : frontImage.extension}`);
     let backDocumentPath = null;
     if (backImage) {
       const backFilename = `trasera.${backImage.extension}`;
-      const backFilePath = join(documentDirectoryPath, backFilename);
-      await saveDocumentFile(backFilePath, backImage.buffer);
-      backDocumentPath = join(
-        "assets",
-        "imagenes",
-        "pre-checking",
-        year,
-        month,
-        storageDirectory,
-        backFilename,
-      ).replaceAll("\\", "/");
+      backDocumentPath = await saveDocumentFile(backFilename, backImage.buffer, `image/${backImage.extension === "jpg" ? "jpeg" : backImage.extension}`);
     }
-    const frontDocumentPath = join(
-      "assets",
-      "imagenes",
-      "pre-checking",
-      year,
-      month,
-      storageDirectory,
-      frontFilename,
-    ).replaceAll("\\", "/");
 
     await client.query(
       `UPDATE pre_checkings
@@ -6048,17 +6077,9 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
     if (!databaseCommitted) {
-      for (const [filePath, previousFile] of documentFileSnapshots) {
-        try {
-          if (previousFile) await writeFile(filePath, previousFile);
-          else await rm(filePath, {force: true});
-        } catch (restoreError) {
-          console.error(
-            "No se pudo restaurar una imagen tras fallar el pre-check-in.",
-            restoreError,
-          );
-        }
-      }
+      await removeStorageObjects(storageBuckets.private, uploadedDocumentPaths).catch((restoreError) => {
+        console.error("No se pudieron retirar los documentos tras fallar el pre-check-in.", restoreError);
+      });
     }
     next(error);
   } finally {
@@ -6177,6 +6198,15 @@ async function sendDailyTestimonialInvitations() {
 async function start() {
   try {
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS room_images (
+        id SERIAL PRIMARY KEY,
+        room_id INT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
+        object_path TEXT NOT NULL UNIQUE,
+        image_url TEXT NOT NULL,
+        position INT NOT NULL DEFAULT 0 CHECK (position >= 0),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS room_images_room_position_idx ON room_images(room_id, position, id);
       ALTER TABLE rooms ADD COLUMN IF NOT EXISTS image_url TEXT;
       ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
       ALTER TABLE rooms ADD COLUMN IF NOT EXISTS pricing_type TEXT NOT NULL DEFAULT 'standard';
@@ -6215,7 +6245,7 @@ async function start() {
                THEN '["Habitaciones dobles con baño","Salón con chimenea","Juegos de mesa","Cocina totalmente equipada","Calefacción y agua caliente","Patio-terraza","Barbacoa","Parking","Servicios del hotel"]'::jsonb
                ELSE features
              END,
-             image_url = COALESCE(image_url, '/api/web-images/casa-rural.webp')
+             image_url = COALESCE(image_url, '${publicStorageUrl("site/casa-rural.webp")}')
        WHERE slug = 'casa-rural';
       ALTER TABLE bookings ADD COLUMN IF NOT EXISTS discount_code TEXT;
       ALTER TABLE bookings ADD COLUMN IF NOT EXISTS discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0;

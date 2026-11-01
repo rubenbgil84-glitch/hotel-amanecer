@@ -190,7 +190,7 @@
           @for (closure of closures(); track closure.id) {
             <article class="closure-item">
               <div>
-                <strong>{{ closure.start_date | date: 'dd/MM/yyyy' : 'UTC' }} – {{ closure.end_date | date: 'dd/MM/yyyy' : 'UTC' }}</strong>
+                <strong>{{ closure.start_date | date: 'dd/MM/yyyy' }} – {{ closure.end_date | date: 'dd/MM/yyyy' }}</strong>
                 <p>{{ closure.reason || 'Cierre del hotel' }}</p>
               </div>
               <div class="closure-actions">

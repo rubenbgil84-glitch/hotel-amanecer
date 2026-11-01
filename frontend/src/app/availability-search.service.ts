@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { AvailabilitySearch, Room } from './api.service';
+import { hotelDateKey } from './date-only';
 
 interface StoredAvailability {
   search: AvailabilitySearch | null;
@@ -9,13 +10,6 @@ interface StoredAvailability {
 
 const STORAGE_KEY = 'hotel-amanecer:availability';
 
-function localDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 function isAvailabilitySearch(value: unknown): value is AvailabilitySearch {
   if (typeof value !== 'object' || value === null) return false;
   const search = value as Partial<AvailabilitySearch>;
@@ -24,7 +18,7 @@ function isAvailabilitySearch(value: unknown): value is AvailabilitySearch {
     const parsed = new Date(`${date}T00:00:00.000Z`);
     return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
   };
-  const today = localDateKey(new Date());
+  const today = hotelDateKey();
 
   return validDate(search.check_in)
     && validDate(search.check_out)

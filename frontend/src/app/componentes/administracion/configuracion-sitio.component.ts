@@ -4,6 +4,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../api.service';
+import { hotelDateKey } from '../../date-only';
 import type { VatRate } from '../../api.service';
 import { SiteContentService } from '../../site-content.service';
 import {
@@ -162,7 +163,7 @@ export class ConfiguracionSitio {
   readonly testimonials = signal<AdminTestimonial[]>([]);
   readonly loading = signal(true);
   readonly saving = signal(false);
-  readonly today = new Date().toISOString().slice(0, 10);
+  readonly today = hotelDateKey();
   readonly moderatingId = signal<number | null>(null);
   readonly error = signal('');
   readonly notice = signal('');

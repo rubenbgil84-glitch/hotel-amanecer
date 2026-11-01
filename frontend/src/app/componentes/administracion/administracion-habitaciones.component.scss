@@ -28,7 +28,9 @@
 .description-field, .features-field, .image-field, .active-field { grid-column: span 2; }
 .active-field { flex-direction: row !important; align-items: center; }
 .active-field input { accent-color: var(--forest); }
-.image-preview { width: min(100%, 32rem); max-height: 18rem; object-fit: cover; }
+.image-gallery-editor { display: grid; grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr)); gap: 1rem; margin-top: .75rem; }
+.image-gallery-editor figure { display: grid; gap: .5rem; margin: 0; }
+.image-preview { width: 100%; height: 9rem; border-radius: .6rem; object-fit: cover; }
 .form-actions, .card-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
 .blocks-editor { margin-top: 2rem; padding: 1.25rem; border: 1px solid #d9ded3; background: #eef1ea; }
 .blocks-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }

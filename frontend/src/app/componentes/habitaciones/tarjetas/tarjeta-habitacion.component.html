@@ -1,6 +1,11 @@
 <article class="room">
   <div class="room-img">
-    <img [src]="room().image_url || fallbackImages[index() % fallbackImages.length]" [alt]="'Interior de ' + room().name" loading="lazy" decoding="async" />
+    <img [src]="currentImage() || fallbackImages[index() % fallbackImages.length]" [alt]="'Interior de ' + room().name" loading="lazy" decoding="async" />
+    @if (galleryImages().length > 1) {
+      <button type="button" class="gallery-control gallery-previous" [attr.aria-label]="'Foto anterior de ' + room().name" (click)="showPreviousImage()">‹</button>
+      <button type="button" class="gallery-control gallery-next" [attr.aria-label]="'Foto siguiente de ' + room().name" (click)="showNextImage()">›</button>
+      <span class="gallery-count" aria-live="polite">{{ imageIndex() + 1 }} / {{ galleryImages().length }}</span>
+    }
     <span class="room-capacity">{{ room().capacity }} personas</span>
   </div>
   <div class="room-body">

@@ -627,6 +627,7 @@ select {
 
 .room-img {
   position: relative;
+  position: relative;
   aspect-ratio: 1.35;
   overflow: hidden;
   background: #ddd8cd;
@@ -641,6 +642,35 @@ select {
   .room:hover & img {
     transform: scale(1.04);
   }
+}
+
+.gallery-control {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(20 30 25 / 72%);
+  color: #fff;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+.gallery-previous { left: .75rem; }
+.gallery-next { right: .75rem; }
+.gallery-count {
+  position: absolute;
+  right: .75rem;
+  bottom: .75rem;
+  padding: .2rem .55rem;
+  border-radius: 99px;
+  background: rgb(20 30 25 / 72%);
+  color: #fff;
+  font-size: .75rem;
 }
 
 .room-capacity {
