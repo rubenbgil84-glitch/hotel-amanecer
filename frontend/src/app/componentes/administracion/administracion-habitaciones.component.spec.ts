@@ -44,6 +44,23 @@ const sampleRooms: AdminRoom[] = [
     is_active: false,
     availability_blocks: [],
   },
+  {
+    id: 3,
+    name: 'Habitación Este',
+    slug: 'habitacion-este',
+    description: 'Otra habitación de prueba para la selección masiva.',
+    price_per_night: 90,
+    pricing_type: 'standard',
+    catalog_category: 'Habitación doble',
+    single_price: 30,
+    double_price: 45,
+    extra_bed_price: 15,
+    capacity: 2,
+    features: [],
+    image_url: null,
+    is_active: true,
+    availability_blocks: [],
+  },
 ];
 
 describe('AdministracionHabitaciones bulk actions', () => {
@@ -92,7 +109,8 @@ describe('AdministracionHabitaciones bulk actions', () => {
     selectAll.click();
     fixture.detectChanges();
     expect(fixture.componentInstance.allRoomsSelected()).toBe(true);
-    expect(fixture.componentInstance.selectedRoomIds()).toEqual([1, 2]);
+    expect(fixture.componentInstance.selectedRoomIds()).toEqual([1, 3]);
+    expect(fixture.nativeElement.querySelectorAll('.room-select input[type="checkbox"]')).toHaveLength(2);
 
     const clearSelection = fixture.nativeElement.querySelector('.bulk-selection-status button') as HTMLButtonElement;
     clearSelection.click();
@@ -113,30 +131,28 @@ describe('AdministracionHabitaciones bulk actions', () => {
   it('sends only selected room IDs for activation and deactivation', () => {
     fixture.componentInstance.toggleRoomSelection(1, { target: { checked: true } } as unknown as Event);
     fixture.componentInstance.applyBulkAction('activate');
-    fixture.componentInstance.toggleRoomSelection(2, { target: { checked: true } } as unknown as Event);
+    fixture.componentInstance.toggleRoomSelection(3, { target: { checked: true } } as unknown as Event);
     fixture.componentInstance.applyBulkAction('deactivate');
 
     expect(api.bulkRooms).toHaveBeenNthCalledWith(1, { room_ids: [1], action: 'activate' });
-    expect(api.bulkRooms).toHaveBeenNthCalledWith(2, { room_ids: [1, 2], action: 'deactivate' });
+    expect(api.bulkRooms).toHaveBeenNthCalledWith(2, { room_ids: [1, 3], action: 'deactivate' });
   });
 
   it('sends validated prices with the selected IDs', () => {
-    fixture.componentInstance.toggleRoomSelection(2, { target: { checked: true } } as unknown as Event);
+    fixture.componentInstance.toggleRoomSelection(1, { target: { checked: true } } as unknown as Event);
     fixture.componentInstance.bulkPrices.setValue({
       single_price: 35,
       double_price: 55,
       extra_bed_price: 20,
-      rural_house_price: 195,
     });
     fixture.componentInstance.applyBulkAction('set_prices');
 
     expect(api.bulkRooms).toHaveBeenCalledWith({
-      room_ids: [2],
+      room_ids: [1],
       action: 'set_prices',
       single_price: 35,
       double_price: 55,
       extra_bed_price: 20,
-      rural_house_price: 195,
     });
   });
 
