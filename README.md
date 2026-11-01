@@ -63,3 +63,4 @@ El formulario recoge datos identificativos, contacto, preferencias y consentimie
 - Cambiar un puerto: edita `.env` y reinicia `npm run dev`. Para el puerto expuesto por Docker, usa `DOCKER_POSTGRES_PORT`.
 - Fotos reales: pon `image_url` en la tabla `rooms` (por ejemplo `/img/suite.jpg`) y deja los archivos en `frontend/public/img/`.
 - Todos los textos, nombres y datos de contacto son ficticios. No se ha copiado ningún texto ni imagen de otras plantillas.
+# amanecer
