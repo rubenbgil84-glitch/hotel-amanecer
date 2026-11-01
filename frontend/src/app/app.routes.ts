@@ -71,6 +71,12 @@ export const routes: Routes = [
         title: 'Reservas',
       },
       {
+        path: 'mensajes',
+        loadComponent: () => import('./componentes/administracion/admin-contact-messages.component').then((module) => module.AdminContactMessages),
+        canActivate: [adminGuard],
+        title: 'Mensajes de contacto',
+      },
+      {
         path: 'ses-hospedajes',
         loadComponent: () => import('./componentes/administracion/ses-hospedajes.component').then((module) => module.SesHospedajes),
         canActivate: [adminGuard],
