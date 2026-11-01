@@ -226,6 +226,11 @@ app.use(express.json({limit: "24mb"}));
 
 const hashToken = (token) => createHash("sha256").update(token).digest("hex");
 async function getVatRates(queryable = pool) {
+  await queryable.query(
+    `INSERT INTO vat_rates (effective_from, rate)
+     VALUES ('1900-01-01', 10)
+     ON CONFLICT (effective_from) DO NOTHING`,
+  );
   const {rows} = await queryable.query(
     `SELECT id, effective_from::text AS effective_from, rate::float8 AS rate
        FROM vat_rates
