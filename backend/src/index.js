@@ -11,7 +11,6 @@ import {
 import {chmod, cp, mkdir, readFile, rename, rm, writeFile} from "node:fs/promises";
 import {dirname, join, relative, resolve, sep} from "node:path";
 import {fileURLToPath} from "node:url";
-import nodemailer from "nodemailer";
 import pg from "pg";
 import QRCode from "qrcode";
 import bcrypt from "bcryptjs";
@@ -31,11 +30,10 @@ const {
   ADMIN_USERNAME,
   ADMIN_PASSWORD,
   ADMIN_JWT_SECRET,
-  EMAIL_HOST,
-  EMAIL_PORT = "587",
-  EMAIL_USER,
   EMAIL_PASS,
-  EMAIL_FROM = EMAIL_USER,
+  RESEND_API_KEY = EMAIL_PASS,
+  EMAIL_FROM,
+  RESEND_TEST_RECIPIENT,
   HOTEL_CONTACT_EMAIL = EMAIL_FROM,
   HOTEL_DATA_DIR,
   FRONTEND_PORT = "4200",
@@ -50,14 +48,8 @@ if (!DATABASE_URL) {
     "Falta DATABASE_URL. Configúrala en el .env de la raíz del proyecto.",
   );
 }
-if (!EMAIL_HOST || !EMAIL_USER || !EMAIL_PASS) {
-  throw new Error(
-    "Falta configurar EMAIL_HOST, EMAIL_USER y EMAIL_PASS en el .env de la raíz.",
-  );
-}
-const emailPort = Number(EMAIL_PORT);
-if (!Number.isInteger(emailPort) || emailPort < 1 || emailPort > 65535) {
-  throw new Error("EMAIL_PORT debe ser un puerto SMTP válido.");
+if (!RESEND_API_KEY) {
+  throw new Error("Falta configurar RESEND_API_KEY en el entorno del backend.");
 }
 const frontendUrl =
   process.env.FRONTEND_BASE_URL ?? `http://localhost:${FRONTEND_PORT}`;
@@ -211,15 +203,58 @@ const contactRateLimitWindowMs = 15 * 60 * 1000;
 const adminLoginAttempts = new Map();
 const adminSessionDurationSeconds = 8 * 60 * 60;
 const adminLoginWindowMs = 15 * 60 * 1000;
-const mailer = nodemailer.createTransport({
-  host: EMAIL_HOST,
-  port: emailPort,
-  secure: emailPort === 465,
-  connectionTimeout: 10_000,
-  greetingTimeout: 10_000,
-  socketTimeout: 15_000,
-  auth: {user: EMAIL_USER, pass: EMAIL_PASS.replace(/\s/g, "")},
-});
+const mailer = {
+  async sendMail(message) {
+    if (!message.from) {
+      throw new Error(
+        "Falta configurar EMAIL_FROM con una dirección verificada en Resend.",
+      );
+    }
+    const recipients = RESEND_TEST_RECIPIENT
+      ? [RESEND_TEST_RECIPIENT]
+      : Array.isArray(message.to)
+        ? message.to
+        : [message.to];
+    const attachments = message.attachments?.map((attachment) => ({
+      filename: attachment.filename,
+      content: Buffer.isBuffer(attachment.content)
+        ? attachment.content.toString("base64")
+        : Buffer.from(attachment.content).toString("base64"),
+      ...(attachment.contentType
+        ? {content_type: attachment.contentType}
+        : {}),
+    }));
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY.replace(/\s/g, "")}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: message.from,
+        to: recipients,
+        subject: message.subject,
+        ...(message.replyTo ? {reply_to: message.replyTo} : {}),
+        ...(message.text ? {text: message.text} : {}),
+        ...(message.html ? {html: message.html} : {}),
+        ...(attachments?.length ? {attachments} : {}),
+      }),
+    });
+    const responseText = await response.text();
+    let result;
+    try {
+      result = responseText ? JSON.parse(responseText) : {};
+    } catch {
+      result = {};
+    }
+    if (!response.ok) {
+      throw new Error(
+        `Resend API ${response.status}: ${result.message || responseText || "error al enviar correo"}`,
+      );
+    }
+    return {messageId: result.id};
+  },
+};
 
 async function prepareImageStorage() {
   await Promise.all([

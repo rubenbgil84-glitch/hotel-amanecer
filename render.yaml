@@ -12,15 +12,11 @@ services:
         value: production
       - key: DATABASE_URL
         sync: false
-      - key: EMAIL_HOST
-        value: smtp.resend.com
-      - key: EMAIL_PORT
-        value: "465"
-      - key: EMAIL_USER
-        value: resend
-      - key: EMAIL_PASS
+      - key: RESEND_API_KEY
         sync: false
       - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_TEST_RECIPIENT
         sync: false
       - key: HOTEL_CONTACT_EMAIL
         sync: false
