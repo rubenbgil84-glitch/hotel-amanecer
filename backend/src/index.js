@@ -8,7 +8,7 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
-import {chmod, mkdir, readFile, rename, rm, writeFile} from "node:fs/promises";
+import {chmod, cp, mkdir, readFile, rename, rm, writeFile} from "node:fs/promises";
 import {dirname, join, relative, resolve, sep} from "node:path";
 import {fileURLToPath} from "node:url";
 import nodemailer from "nodemailer";
@@ -26,7 +26,7 @@ import {
 import {buildSesHospedajesXml} from "./ses-hospedajes-xml.js";
 
 const {
-  BACKEND_PORT = "4000",
+  BACKEND_PORT = process.env.PORT ?? "4000",
   DATABASE_URL,
   ADMIN_USERNAME,
   ADMIN_PASSWORD,
@@ -35,6 +35,9 @@ const {
   EMAIL_PORT = "587",
   EMAIL_USER,
   EMAIL_PASS,
+  EMAIL_FROM = EMAIL_USER,
+  HOTEL_CONTACT_EMAIL = EMAIL_FROM,
+  HOTEL_DATA_DIR,
   FRONTEND_PORT = "4200",
   HOTEL_ADDRESS = "Calle Fuente Nueva, 5, 34449 Población de Campos, Palencia",
   HOTEL_MAP_URL = "https://www.google.com/maps/search/?api=1&query=Hotel%20Amanecer%20en%20Campos%20Calle%20Fuente%20Nueva%2C%205%2C%2034449%20Poblaci%C3%B3n%20de%20Campos%2C%20Palencia",
@@ -197,16 +200,12 @@ Las cookies y tecnologías de almacenamiento pueden cambiar si se incorporan nue
 Este texto describe la configuración actualmente implementada. Revíselo si se incorporan herramientas, proveedores o cookies adicionales, y complete el contacto de privacidad antes de publicarlo.`,
 };
 const siteSettingKeys = Object.keys(siteSettingDefaults);
-const documentStorageRoot = fileURLToPath(
-  new URL("../assets/imagenes/pre-checking/", import.meta.url),
-);
+const bundledImageRoot = fileURLToPath(new URL("../assets/imagenes/", import.meta.url));
+const imageStorageRoot = HOTEL_DATA_DIR ? resolve(HOTEL_DATA_DIR, "imagenes") : bundledImageRoot;
+const documentStorageRoot = join(imageStorageRoot, "pre-checking");
+const roomImageStorageRoot = join(imageStorageRoot, "habitaciones");
+const webImageStorageRoot = join(imageStorageRoot, "web");
 const backendStorageRoot = fileURLToPath(new URL("../", import.meta.url));
-const roomImageStorageRoot = fileURLToPath(
-  new URL("../assets/imagenes/habitaciones/", import.meta.url),
-);
-const webImageStorageRoot = fileURLToPath(
-  new URL("../assets/imagenes/web/", import.meta.url),
-);
 const contactSubmissions = new Map();
 const contactRateLimitWindowMs = 15 * 60 * 1000;
 const adminLoginAttempts = new Map();
@@ -221,6 +220,32 @@ const mailer = nodemailer.createTransport({
   socketTimeout: 15_000,
   auth: {user: EMAIL_USER, pass: EMAIL_PASS.replace(/\s/g, "")},
 });
+
+async function prepareImageStorage() {
+  await Promise.all([
+    mkdir(documentStorageRoot, {recursive: true, mode: 0o755}),
+    mkdir(roomImageStorageRoot, {recursive: true, mode: 0o755}),
+    mkdir(webImageStorageRoot, {recursive: true, mode: 0o755}),
+  ]);
+  if (HOTEL_DATA_DIR) {
+    await Promise.all([
+      cp(join(bundledImageRoot, "habitaciones"), roomImageStorageRoot, {
+        recursive: true,
+        force: false,
+        errorOnExist: false,
+      }).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      }),
+      cp(join(bundledImageRoot, "web"), webImageStorageRoot, {
+        recursive: true,
+        force: false,
+        errorOnExist: false,
+      }).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      }),
+    ]);
+  }
+}
 const app = express();
 app.use(express.json({limit: "24mb"}));
 
@@ -563,8 +588,8 @@ async function sendContactEmails({name, email, phone, subject, message}) {
   ].join("\n");
 
   await mailer.sendMail({
-    from: EMAIL_USER,
-    to: site.site_email || EMAIL_USER,
+    from: EMAIL_FROM,
+    to: site.site_email || HOTEL_CONTACT_EMAIL,
     replyTo: email,
     subject: `Contacto web · ${subject}`,
     text,
@@ -579,7 +604,7 @@ async function sendContactEmails({name, email, phone, subject, message}) {
   });
 
   await mailer.sendMail({
-    from: EMAIL_USER,
+    from: EMAIL_FROM,
     to: email,
     subject: `Hemos recibido tu mensaje · ${site.site_name}`,
     text: `Hola ${name},\n\nHemos recibido tu solicitud${subject ? ` sobre "${subject}"` : ""}. En la mayor brevedad posible nos pondremos en contacto contigo.\n\nGracias por escribirnos.\n${site.site_name}`,
@@ -710,7 +735,7 @@ async function sendBookingConfirmationEmail({
       : ["El pre-check-in de esta reserva ya está completado."]),
   ].join("\n");
   await mailer.sendMail({
-    from: EMAIL_USER,
+    from: EMAIL_FROM,
     to: email,
     subject: `Reserva confirmada · ${reference} | ${site.site_name}`,
     text,
@@ -1121,7 +1146,7 @@ app.post("/api/testimonial-invitations/:token", async (req, res, next) => {
     const safeGuestName = escapeHtml(invitation.guest_name);
     const safeSiteName = escapeHtml(site.site_name);
     await mailer.sendMail({
-      from: EMAIL_USER,
+      from: EMAIL_FROM,
       to: invitation.email,
       subject: `Gracias por compartir tu experiencia · ${site.site_name}`,
       text: `Hola ${invitation.guest_name},\n\nGracias por dedicar un momento a compartir tu experiencia con nosotros. Tu opinión nos ayuda a seguir mejorando.\n\n¡Esperamos volver a verte pronto!\n${site.site_name}`,
@@ -2759,7 +2784,7 @@ async function sendPrecheckinCompletedEmail(booking, pdfAttachment) {
     )
     .join("");
   await mailer.sendMail({
-    from: EMAIL_USER,
+    from: EMAIL_FROM,
     to: booking.email,
     subject: `Pre-check-in completado · ${booking.reservation_code} | ${site.site_name}`,
     text: [
@@ -3208,7 +3233,7 @@ app.post(
       const safeName = escapeHtml(booking.guest_name);
       const safeSite = escapeHtml(site.site_name);
       await mailer.sendMail({
-        from: EMAIL_USER,
+        from: EMAIL_FROM,
         to: booking.email,
         subject: `Actualiza tus datos de pre-check-in · ${booking.reservation_code} | ${site.site_name}`,
         text: [
@@ -4363,9 +4388,9 @@ app.post(
           .join(". ");
         try {
           await mailer.sendMail({
-            from: EMAIL_USER,
+            from: EMAIL_FROM,
             to: recipient.email,
-            replyTo: site.site_email || EMAIL_USER,
+            replyTo: site.site_email || HOTEL_CONTACT_EMAIL,
             subject: `Una invitación especial para tu próxima estancia · ${site.site_name}`,
             text: `Hola ${recipient.guest_name},\n\nGracias por haberte alojado en ${site.site_name}. Nos encantará recibirte de nuevo. Usa el código ${promotion.code} para obtener un ${promotion.discount_percent}% de descuento. ${conditions}.\n\nConsulta disponibilidad en ${frontendUrl}/habitaciones.\n\n${site.site_name}`,
             html: `<div style="margin:0;padding:32px 16px;background:#f4f3ed;font-family:Arial,sans-serif;color:#252a22;line-height:1.6">
@@ -5846,7 +5871,7 @@ async function sendDailyTestimonialInvitations() {
     const siteName = escapeHtml(site.site_name);
     try {
       await mailer.sendMail({
-        from: EMAIL_USER,
+        from: EMAIL_FROM,
         to: booking.email,
         subject: `¿Cómo fue tu estancia? · ${site.site_name}`,
         text: `Hola ${booking.guest_name},\n\nGracias por elegirnos para tu estancia. Nos encantaría conocer tu opinión: ${reviewLink}\n\n${site.site_name}`,
@@ -5883,6 +5908,7 @@ async function sendDailyTestimonialInvitations() {
 }
 
 async function start() {
+  await prepareImageStorage();
   try {
     await pool.query(`
       ALTER TABLE rooms ADD COLUMN IF NOT EXISTS image_url TEXT;
@@ -6327,9 +6353,8 @@ async function start() {
     return;
   }
 
-  // Solo escucha en local: el único que debe hablar con el backend es el gateway.
-  app.listen(Number(BACKEND_PORT), "127.0.0.1", () =>
-    console.log(`Backend en 127.0.0.1:${BACKEND_PORT}`),
+  app.listen(Number(BACKEND_PORT), "0.0.0.0", () =>
+    console.log(`Backend escuchando en el puerto ${BACKEND_PORT}`),
   );
   cron.schedule(
     "00 10 * * *",
