@@ -26,8 +26,7 @@
     <section class="welcome-card" aria-labelledby="welcome-admin-title">
       <div class="welcome-icon" aria-hidden="true">A</div>
       <div>
-        <h2 id="welcome-admin-title">Tu panel está preparado</h2>
-        <p>Gestiona las reservas, consulta los pre-check-in y administra las habitaciones del hotel.</p>
+        <h2 id="welcome-admin-title">Panel de Administracion</h2>
         @if (upcomingClosures().length) {
           <section class="closure-alert" aria-labelledby="closure-alert-title">
             <div>
@@ -88,12 +87,12 @@
         <p>Crea promociones con límites de uso, importes mínimos y fechas excluidas.</p>
         <span class="module-state">Gestionar promociones →</span>
       </a>
-      <article class="module-card">
+      <a class="module-card" routerLink="/carmen-admin/mensajes">
         <span class="module-icon" aria-hidden="true">06</span>
         <h2>Mensajes</h2>
         <p>Solicitudes recibidas desde el formulario de contacto.</p>
-        <span class="module-state">Próximamente</span>
-      </article>
+        <span class="module-state">Gestionar mensajes →</span>
+      </a>
     </section>
   </section>
 </div>

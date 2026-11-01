@@ -191,6 +191,23 @@ export interface ContactInput {
   privacy_accepted: boolean;
 }
 
+export interface ContactConversationEntry {
+  role: 'contact' | 'hotel';
+  body: string;
+  sent_at: string;
+}
+
+export interface AdminContactMessage {
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  subject: string;
+  message: ContactConversationEntry[];
+  status: 'pending' | 'responded';
+  created_at: string;
+}
+
 export interface AdminCredentials {
   username: string;
   password: string;

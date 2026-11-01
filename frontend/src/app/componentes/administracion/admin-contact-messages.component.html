@@ -1,0 +1,139 @@
+<div class="admin-page">
+  <header class="admin-header">
+    <div class="wrap admin-header-inner">
+      <a class="admin-brand" routerLink="/carmen-admin/dashboard">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Hotel Amanecer <small>Administración</small></span>
+      </a>
+      <a class="back-link" routerLink="/carmen-admin/dashboard">Volver al panel</a>
+    </div>
+  </header>
+
+  <main class="wrap messages-content">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">Atención al huésped</p>
+        <h1>Mensajes</h1>
+        <p>Consulta las solicitudes de contacto y responde desde aquí.</p>
+      </div>
+      <span class="message-count">{{ messages().length }} mensajes</span>
+    </div>
+
+    @if (error()) {
+      <p class="message error-message" role="alert">{{ error() }}</p>
+    }
+    @if (notice()) {
+      <p class="message success-message" role="status">{{ notice() }}</p>
+    }
+
+    <form class="filters" [formGroup]="filters" (ngSubmit)="loadMessages()">
+      <label>Desde<input type="date" formControlName="from_date" /></label>
+      <label>Hasta<input type="date" formControlName="to_date" /></label>
+      <label>Estado
+        <select formControlName="status">
+          <option value="all">Todos</option>
+          <option value="pending">Pendientes</option>
+          <option value="responded">Respondidos</option>
+        </select>
+      </label>
+      <label class="search-field">Buscar
+        <input type="search" formControlName="search" placeholder="Nombre, email, teléfono, asunto o mensaje" />
+      </label>
+      <div class="filter-actions">
+        <button class="primary-button" type="submit">Filtrar</button>
+        <button class="quiet-button" type="button" (click)="resetFilters()">Limpiar</button>
+      </div>
+    </form>
+
+    @if (loading()) {
+      <p class="empty-state" role="status">Cargando mensajes…</p>
+    } @else if (!messages().length) {
+      <p class="empty-state">No hay mensajes que coincidan con los filtros.</p>
+    } @else {
+      <div class="table-scroll">
+        <table class="message-table">
+          <thead>
+            <tr>
+              <th>Recibido</th>
+              <th>Remitente</th>
+              <th>Asunto y último mensaje</th>
+              <th>Estado</th>
+              <th><span class="visually-hidden">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (contact of messages(); track contact.id) {
+              <tr>
+                <td class="date-cell">{{ contact.created_at | date: 'dd/MM/yyyy HH:mm' : 'UTC' }}</td>
+                <td>
+                  <strong>{{ contact.name }}</strong>
+                  <a [href]="'mailto:' + contact.email">{{ contact.email }}</a>
+                  @if (contact.phone) { <small>{{ contact.phone }}</small> }
+                </td>
+                <td class="subject-cell">
+                  <strong>{{ contact.subject }}</strong>
+                  <p>{{ preview(contact) }}</p>
+                </td>
+                <td>
+                  <span class="status" [class.status-done]="contact.status === 'responded'">
+                    {{ contact.status === 'responded' ? 'Respondido' : 'Pendiente' }}
+                  </span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <button class="secondary-button" type="button" (click)="openReply(contact)">
+                      {{ replyingTo()?.id === contact.id ? 'Cerrar' : 'Responder' }}
+                    </button>
+                    <button class="delete-button" type="button" (click)="deleteMessage(contact)" [disabled]="actionId() !== null" [attr.aria-label]="'Eliminar mensaje de ' + contact.name">
+                      Eliminar
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (replyingTo(); as contact) {
+      <section class="reply-editor" aria-labelledby="reply-editor-title">
+        <div class="editor-heading">
+          <div>
+            <p class="eyebrow">Conversación con {{ contact.name }}</p>
+            <h2 id="reply-editor-title">{{ contact.subject }}</h2>
+            <a [href]="'mailto:' + contact.email">{{ contact.email }}</a>
+            @if (contact.phone) { <span class="contact-phone"> · {{ contact.phone }}</span> }
+          </div>
+          <button class="quiet-button" type="button" (click)="closeReply()">Cerrar</button>
+        </div>
+
+        <div class="conversation" aria-label="Historial de mensajes">
+          @for (entry of contact.message; track $index) {
+            <article class="conversation-entry" [class.hotel-entry]="entry.role === 'hotel'">
+              <div class="entry-heading">
+                <strong>{{ entry.role === 'contact' ? contact.name : 'Hotel Amanecer' }}</strong>
+                <time>{{ entry.sent_at | date: 'dd/MM/yyyy HH:mm' : 'UTC' }}</time>
+              </div>
+              <p>{{ entry.body }}</p>
+            </article>
+          }
+        </div>
+
+        <form [formGroup]="replyForm" (ngSubmit)="sendReply()">
+          <label class="reply-label" for="contact-reply">Tu respuesta</label>
+          <textarea id="contact-reply" formControlName="message" rows="6" maxlength="5000" placeholder="Escribe aquí tu respuesta…"></textarea>
+          <div class="reply-footer">
+            <small>Se guardará en la conversación y se enviará a {{ contact.email }}.</small>
+            <div class="reply-actions">
+              <button class="quiet-button" type="button" (click)="closeReply()">Cancelar</button>
+              <button class="primary-button" type="submit" [disabled]="saving()">
+                {{ saving() ? 'Enviando…' : 'Guardar y enviar' }}
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+    }
+  </main>
+</div>

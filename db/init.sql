@@ -44,6 +44,21 @@ CREATE TABLE bookings (
   CHECK (check_out > check_in)
 );
 
+CREATE TABLE contact_messages (
+  id BIGSERIAL PRIMARY KEY,
+  name TEXT NOT NULL CHECK (char_length(name) BETWEEN 2 AND 100),
+  email TEXT NOT NULL CHECK (char_length(email) BETWEEN 3 AND 254),
+  phone TEXT NOT NULL DEFAULT '' CHECK (char_length(phone) <= 40),
+  subject TEXT NOT NULL CHECK (char_length(subject) BETWEEN 3 AND 120),
+  message JSONB NOT NULL CHECK (jsonb_typeof(message) = 'array'),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'responded')),
+  privacy_accepted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE contact_messages ENABLE ROW LEVEL SECURITY;
+CREATE INDEX contact_messages_created_at_idx ON contact_messages (created_at DESC);
+CREATE INDEX contact_messages_status_created_at_idx ON contact_messages (status, created_at DESC);
+
 CREATE TABLE vat_rates (
   id SERIAL PRIMARY KEY,
   effective_from DATE NOT NULL UNIQUE,

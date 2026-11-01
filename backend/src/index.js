@@ -717,6 +717,43 @@ async function sendContactEmails({name, email, phone, subject, message}) {
   });
 }
 
+async function sendContactReplyEmail({name, email, subject, message}) {
+  const site = await readSiteSettings();
+  const safeSiteName = escapeHtml(site.site_name);
+  const safeName = escapeHtml(name);
+  const safeSubject = escapeHtml(subject);
+  const safeMessage = escapeHtml(message).replace(/\r?\n/g, "<br />");
+  await mailer.sendMail({
+    from: EMAIL_USER,
+    to: email,
+    replyTo: site.site_email || EMAIL_USER,
+    subject: `Respuesta a tu consulta · ${subject}`,
+    text: [
+      `Hola ${name},`,
+      "",
+      `Te respondemos a tu mensaje para ${site.site_name}.`,
+      "",
+      `Asunto: ${subject}`,
+      "",
+      message,
+      "",
+      site.site_name,
+    ].join("\n"),
+    html: `<div style="margin:0;padding:28px 12px;background:#f7f5ef;font-family:Arial,Helvetica,sans-serif;color:#292b27;line-height:1.6">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;margin:0 auto;border:1px solid #e6e2d9;background:#fff">
+        <tr><td style="padding:24px 30px;background:#1d332b;color:#fff"><p style="margin:0;color:#e0cba5;font-size:12px;letter-spacing:2px;text-transform:uppercase">${safeSiteName}</p></td></tr>
+        <tr><td style="padding:30px">
+          <h1 style="margin:0 0 14px;color:#1d332b;font-size:24px">Respuesta a tu mensaje</h1>
+          <p>Hola ${safeName},</p>
+          <p>Te respondemos a tu consulta sobre <strong>${safeSubject}</strong>.</p>
+          <div style="margin-top:20px;padding:18px 20px;background:#f7f5ef;color:#292b27;overflow-wrap:anywhere">${safeMessage}</div>
+          <p style="margin-bottom:0">${safeSiteName}</p>
+        </td></tr>
+      </table>
+    </div>`,
+  });
+}
+
 async function sendBookingConfirmationEmail({
   email,
   guestName,
@@ -1690,6 +1727,148 @@ app.delete("/api/admin/closures/:id", requireAdmin, async (req, res, next) => {
   }
 });
 
+app.get("/api/admin/contact-messages", requireAdmin, async (req, res, next) => {
+  const normalizeFilter = (value) => {
+    if (typeof value !== "string" || !value.trim()) return undefined;
+    return value.trim();
+  };
+  const fromDate = normalizeFilter(req.query.from_date);
+  const toDate = normalizeFilter(req.query.to_date);
+  const status = normalizeFilter(req.query.status) ?? "all";
+  const search = normalizeFilter(req.query.search) ?? "";
+  if (
+    (fromDate && !isDate(fromDate)) ||
+    (toDate && !isDate(toDate)) ||
+    (fromDate && toDate && fromDate > toDate) ||
+    !["all", "pending", "responded"].includes(status) ||
+    search.length > 120
+  ) {
+    return res
+      .status(400)
+      .json({errors: ["Los filtros de mensajes no son válidos."]});
+  }
+
+  const conditions = [];
+  const values = [];
+  const add = (value) => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+  if (fromDate) conditions.push(`created_at >= ${add(fromDate)}::date`);
+  if (toDate) {
+    conditions.push(`created_at < (${add(toDate)}::date + INTERVAL '1 day')`);
+  }
+  if (status !== "all") conditions.push(`status = ${add(status)}`);
+  if (search) {
+    const query = add(`%${search.replace(/[\\%_]/g, "\\$&")}%`);
+    conditions.push(`(
+      name ILIKE ${query} ESCAPE '\\'
+      OR email ILIKE ${query} ESCAPE '\\'
+      OR phone ILIKE ${query} ESCAPE '\\'
+      OR subject ILIKE ${query} ESCAPE '\\'
+      OR message::text ILIKE ${query} ESCAPE '\\'
+    )`);
+  }
+
+  try {
+    const {rows} = await pool.query(
+      `SELECT id, name, email, phone, subject, message, status, created_at
+         FROM contact_messages
+        ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
+        ORDER BY created_at DESC, id DESC`,
+      values,
+    );
+    res.set("Cache-Control", "no-store").json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(
+  "/api/admin/contact-messages/:id/reply",
+  requireAdmin,
+  async (req, res, next) => {
+    const id = Number(req.params.id);
+    const reply = req.body?.message;
+    if (
+      !Number.isSafeInteger(id) ||
+      id < 1 ||
+      typeof reply !== "string" ||
+      reply.trim().length < 2 ||
+      reply.trim().length > 5000
+    ) {
+      return res.status(400).json({errors: ["La respuesta no es válida."]});
+    }
+
+    let client;
+    let transactionStarted = false;
+    try {
+      client = await pool.connect();
+      await client.query("BEGIN");
+      transactionStarted = true;
+      const {rows} = await client.query(
+        `SELECT id, name, email, subject
+           FROM contact_messages
+          WHERE id = $1
+          FOR UPDATE`,
+        [id],
+      );
+      if (!rows.length) {
+        await client.query("ROLLBACK");
+        transactionStarted = false;
+        return res.status(404).json({errors: ["No se encontró el mensaje."]});
+      }
+
+      const contact = rows[0];
+      const body = reply.trim();
+      await sendContactReplyEmail({...contact, message: body});
+      const responseEntry = {
+        role: "hotel",
+        body,
+        sent_at: new Date().toISOString(),
+      };
+      await client.query(
+        `UPDATE contact_messages
+            SET message = message || $2::jsonb,
+                status = 'responded'
+          WHERE id = $1`,
+        [id, JSON.stringify([responseEntry])],
+      );
+      await client.query("COMMIT");
+      transactionStarted = false;
+      res.json({ok: true});
+    } catch (error) {
+      if (transactionStarted) await client.query("ROLLBACK").catch(() => {});
+      next(error);
+    } finally {
+      client?.release();
+    }
+  },
+);
+
+app.delete(
+  "/api/admin/contact-messages/:id",
+  requireAdmin,
+  async (req, res, next) => {
+    const id = Number(req.params.id);
+    if (!Number.isSafeInteger(id) || id < 1) {
+      return res.status(400).json({errors: ["El identificador no es válido."]});
+    }
+    try {
+      const {rowCount} = await pool.query(
+        "DELETE FROM contact_messages WHERE id = $1",
+        [id],
+      );
+      if (!rowCount) {
+        return res.status(404).json({errors: ["No se encontró el mensaje."]});
+      }
+      res.json({ok: true});
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 app.post("/api/contact", async (req, res, next) => {
   const {
     name,
@@ -1750,14 +1929,43 @@ app.post("/api/contact", async (req, res, next) => {
   }
 
   try {
-    await sendContactEmails({
+    const {rows} = await pool.query(
+      `INSERT INTO contact_messages
+         (name, email, phone, subject, message, privacy_accepted_at)
+       VALUES (
+         $1, $2, $3, $4,
+         jsonb_build_array(jsonb_build_object(
+           'role', 'contact', 'body', $5::text, 'sent_at', now()
+         )),
+         now()
+       )
+       RETURNING id`,
+      [
+        name.trim(),
+        contactEmail,
+        phone.trim(),
+        subject.trim(),
+        message.trim(),
+      ],
+    );
+    const contactMessageId = rows[0].id;
+    let notificationSent = true;
+    try {
+      await sendContactEmails({
       name: name.trim(),
       email: contactEmail,
       phone: phone.trim(),
       subject: subject.trim(),
       message: message.trim(),
-    });
-    res.status(201).json({ok: true});
+      });
+    } catch (emailError) {
+      notificationSent = false;
+      console.error(
+        `El mensaje de contacto ${contactMessageId} quedó guardado, pero no se pudieron enviar sus correos.`,
+        emailError,
+      );
+    }
+    res.status(201).json({ok: true, notification_sent: notificationSent});
   } catch (error) {
     next(error);
   }
@@ -6279,6 +6487,22 @@ async function start() {
       CREATE INDEX IF NOT EXISTS booking_testimonials_public_idx
         ON booking_testimonials (moderated_at DESC, submitted_at DESC)
         WHERE submitted_at IS NOT NULL AND is_approved = TRUE;
+      CREATE TABLE IF NOT EXISTS contact_messages (
+        id BIGSERIAL PRIMARY KEY,
+        name TEXT NOT NULL CHECK (char_length(name) BETWEEN 2 AND 100),
+        email TEXT NOT NULL CHECK (char_length(email) BETWEEN 3 AND 254),
+        phone TEXT NOT NULL DEFAULT '' CHECK (char_length(phone) <= 40),
+        subject TEXT NOT NULL CHECK (char_length(subject) BETWEEN 3 AND 120),
+        message JSONB NOT NULL CHECK (jsonb_typeof(message) = 'array'),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'responded')),
+        privacy_accepted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      ALTER TABLE contact_messages ENABLE ROW LEVEL SECURITY;
+      CREATE INDEX IF NOT EXISTS contact_messages_created_at_idx
+        ON contact_messages (created_at DESC);
+      CREATE INDEX IF NOT EXISTS contact_messages_status_created_at_idx
+        ON contact_messages (status, created_at DESC);
       DO $migration$
       BEGIN
         IF EXISTS (
