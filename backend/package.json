@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch --env-file=../.env src/index.js",
-    "start": "node --env-file=../.env src/index.js",
+    "start": "node src/index.js",
     "migrate:assets": "node --env-file=../.env scripts/migrate-assets-to-supabase.js"
   },
   "dependencies": {
