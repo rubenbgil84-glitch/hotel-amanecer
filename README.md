@@ -67,3 +67,4 @@ El formulario recoge datos identificativos, contacto, preferencias y consentimie
 - Todos los textos, nombres y datos de contacto son ficticios. No se ha copiado ningún texto ni imagen de otras plantillas.
 # amanecer
 # amanecer
+# hotelamanecer
