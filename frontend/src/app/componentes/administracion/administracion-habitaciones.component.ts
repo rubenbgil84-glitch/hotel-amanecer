@@ -29,12 +29,12 @@ export class AdministracionHabitaciones {
   readonly selectedRoomIds = signal<number[]>([]);
   readonly selectedRoomCount = computed(() => this.selectedRoomIds().length);
   readonly allRoomsSelected = computed(() => {
-    const roomCount = this.rooms()?.length ?? 0;
+    const roomCount = this.standardRooms().length;
     return roomCount > 0 && this.selectedRoomCount() === roomCount;
   });
   readonly someRoomsSelected = computed(() => {
     const selectedCount = this.selectedRoomCount();
-    const roomCount = this.rooms()?.length ?? 0;
+    const roomCount = this.standardRooms().length;
     return selectedCount > 0 && selectedCount < roomCount;
   });
   private imageDataUrl: string | null = null;
@@ -57,7 +57,6 @@ export class AdministracionHabitaciones {
     single_price: [30, [Validators.required, Validators.min(0), Validators.max(100000)]],
     double_price: [45, [Validators.required, Validators.min(0.01), Validators.max(100000)]],
     extra_bed_price: [15, [Validators.required, Validators.min(0), Validators.max(100000)]],
-    rural_house_price: [90, [Validators.required, Validators.min(0.01), Validators.max(100000)]],
   });
 
   readonly blockForm = this.fb.group({
@@ -76,7 +75,7 @@ export class AdministracionHabitaciones {
     this.api.adminRooms().subscribe({
       next: (rooms) => {
         this.rooms.set(rooms);
-        const roomIds = new Set(rooms.map((room) => room.id));
+        const roomIds = new Set(rooms.filter((room) => room.pricing_type === 'standard').map((room) => room.id));
         this.selectedRoomIds.update((ids) => ids.filter((id) => roomIds.has(id)));
         if (showLoading) this.loading.set(false);
       },
@@ -215,6 +214,7 @@ export class AdministracionHabitaciones {
   }
 
   toggleRoomSelection(roomId: number, event: Event): void {
+    if (!this.standardRooms().some((room) => room.id === roomId)) return;
     const checked = (event.target as HTMLInputElement).checked;
     this.selectedRoomIds.update((ids) => checked
       ? [...new Set([...ids, roomId])]
@@ -223,7 +223,7 @@ export class AdministracionHabitaciones {
 
   selectAllRooms(event: Event): void {
     this.selectedRoomIds.set((event.target as HTMLInputElement).checked
-      ? (this.rooms() ?? []).map((room) => room.id)
+      ? this.standardRooms().map((room) => room.id)
       : []);
   }
 
@@ -234,7 +234,8 @@ export class AdministracionHabitaciones {
   applyBulkAction(action: 'activate' | 'deactivate' | 'delete' | 'set_prices'): void {
     if (this.saving()) return;
     this.clearMessages();
-    const ids = this.selectedRoomIds();
+    const standardRoomIds = new Set(this.standardRooms().map((room) => room.id));
+    const ids = this.selectedRoomIds().filter((id) => standardRoomIds.has(id));
     if (!ids.length) {
       this.error.set('Selecciona al menos un alojamiento.');
       return;
@@ -254,7 +255,6 @@ export class AdministracionHabitaciones {
         single_price: Number(this.bulkPrices.controls.single_price.value),
         double_price: Number(this.bulkPrices.controls.double_price.value),
         extra_bed_price: Number(this.bulkPrices.controls.extra_bed_price.value),
-        rural_house_price: Number(this.bulkPrices.controls.rural_house_price.value),
       } : {}),
     };
     this.saving.set(true);

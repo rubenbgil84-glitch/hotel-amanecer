@@ -4897,37 +4897,36 @@ app.post("/api/admin/rooms/bulk", requireAdmin, async (req, res, next) => {
   }
   try {
     if (action === "set_prices") {
-      const {single_price, double_price, extra_bed_price, rural_house_price} =
-        req.body;
+      const {single_price, double_price, extra_bed_price} = req.body;
       if (
-        [single_price, double_price, extra_bed_price, rural_house_price].some(
+        [single_price, double_price, extra_bed_price].some(
           (value) =>
             typeof value !== "number" ||
             !Number.isFinite(value) ||
             value < 0 ||
             value > 100000,
         ) ||
-        double_price <= 0 ||
-        rural_house_price <= 0
+        double_price <= 0
       ) {
         return res.status(400).json({
-          errors: ["Indica precios válidos para cada tipo de alojamiento."],
+          errors: ["Indica precios válidos para las habitaciones."],
         });
       }
       const {rowCount} = await pool.query(
         `UPDATE rooms
-            SET single_price = CASE WHEN pricing_type = 'standard' THEN $2 ELSE single_price END,
-                double_price = CASE WHEN pricing_type = 'standard' THEN $3 ELSE double_price END,
-                extra_bed_price = CASE WHEN pricing_type = 'standard' THEN $4 ELSE extra_bed_price END,
-                price_per_night = CASE WHEN pricing_type = 'rural_house' THEN $5 ELSE $3 END
-          WHERE id = ANY($1::int[])`,
-        [ids, single_price, double_price, extra_bed_price, rural_house_price],
+            SET single_price = $2,
+                double_price = $3,
+                extra_bed_price = $4,
+                price_per_night = $3
+          WHERE id = ANY($1::int[])
+            AND pricing_type = 'standard'`,
+        [ids, single_price, double_price, extra_bed_price],
       );
       return res.json({updated: rowCount});
     }
     if (action === "activate" || action === "deactivate") {
       const {rowCount} = await pool.query(
-        "UPDATE rooms SET is_active = $2 WHERE id = ANY($1::int[])",
+        "UPDATE rooms SET is_active = $2 WHERE id = ANY($1::int[]) AND pricing_type = 'standard'",
         [ids, action === "activate"],
       );
       return res.json({updated: rowCount});
@@ -4936,6 +4935,7 @@ app.post("/api/admin/rooms/bulk", requireAdmin, async (req, res, next) => {
     const {rows: deleted} = await pool.query(
       `DELETE FROM rooms r
         WHERE r.id = ANY($1::int[])
+          AND r.pricing_type = 'standard'
           AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.room_id = r.id)
         RETURNING r.id, r.slug`,
       [ids],
@@ -4944,13 +4944,14 @@ app.post("/api/admin/rooms/bulk", requireAdmin, async (req, res, next) => {
     const {rows: retained} = await pool.query(
       `SELECT id, name FROM rooms
         WHERE id = ANY($1::int[])
+          AND pricing_type = 'standard'
           AND EXISTS (SELECT 1 FROM bookings b WHERE b.room_id = rooms.id)
         ORDER BY name`,
       [ids],
     );
     if (retained.length) {
       await pool.query(
-        "UPDATE rooms SET is_active = FALSE WHERE id = ANY($1::int[])",
+        "UPDATE rooms SET is_active = FALSE WHERE id = ANY($1::int[]) AND pricing_type = 'standard'",
         [retained.map((room) => room.id)],
       );
     }

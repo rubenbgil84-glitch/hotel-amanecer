@@ -18,7 +18,44 @@
       </div>
       <button class="primary-button" type="button" (click)="startCreate()">Añadir habitación</button>
     </div>
-
+        <aside class="bulk-options" aria-labelledby="bulk-options-title">
+          <div class="bulk-panel bulk-selection">
+            <div class="bulk-heading">
+              <div>
+                <p class="eyebrow">Acciones masivas</p>
+                <h2 id="bulk-options-title">Opciones</h2>
+              </div>
+              <label class="bulk-select-all">
+                <input type="checkbox" [checked]="allRoomsSelected()" [indeterminate]="someRoomsSelected()" (change)="selectAllRooms($event)" />
+                <span>Seleccionar todas</span>
+              </label>
+              <div class="bulk-selection-status" aria-live="polite">
+                <span>{{ selectedRoomCount() }} de {{ standardRooms().length }} habitaciones seleccionadas</span>
+                @if (selectedRoomCount()) {
+                  <button type="button" class="text-button" (click)="clearRoomSelection()">Quitar selección</button>
+                }
+              </div>
+            </div>
+            @if (!selectedRoomCount()) {
+              <p class="bulk-empty-selection">Marca una o varias habitaciones para activar acciones.</p>
+            }
+          </div>
+          <form [formGroup]="bulkPrices" (ngSubmit)="applyBulkAction('set_prices')" class="bulk-panel bulk-price-form">
+            <h3>Aplicar precios a la selección</h3>
+            <p class="bulk-section-note">Estos precios se aplican a las habitaciones seleccionadas. La casa rural se gestiona individualmente.</p>
+            <label>Individual (€)<input type="number" formControlName="single_price" min="0" step="0.01" /></label>
+            <label>Doble (€)<input type="number" formControlName="double_price" min="0.01" step="0.01" /></label>
+            <label>Cama supletoria por huésped/noche (€)<input type="number" formControlName="extra_bed_price" min="0" step="0.01" /></label>
+            <button type="submit" class="secondary-button" [disabled]="saving() || !selectedRoomCount() || bulkPrices.invalid">Actualizar precios</button>
+          </form>
+          <div class="bulk-panel bulk-actions">
+            <h3>Estado y eliminación</h3>
+            <button type="button" class="secondary-button" (click)="applyBulkAction('activate')" [disabled]="saving() || !selectedRoomCount()">Activar selección</button>
+            <button type="button" class="quiet-button" (click)="applyBulkAction('deactivate')" [disabled]="saving() || !selectedRoomCount()">Desactivar selección</button>
+            <button type="button" class="delete-button" (click)="applyBulkAction('delete')" [disabled]="saving() || !selectedRoomCount()">Eliminar selección</button>
+            <small>Los alojamientos con reservas históricas se conservan.</small>
+          </div>
+        </aside>
     @if (error()) {
       <p class="message error-message" role="alert">{{ error() }}</p>
     }
@@ -215,7 +252,6 @@
                       <div class="room-image image-placeholder">Sin imagen</div>
                     }
                     <div class="room-card-body">
-                      <label class="room-select"><input type="checkbox" [checked]="selectedRoomIds().includes(room.id)" (change)="toggleRoomSelection(room.id, $event)" /> Seleccionar</label>
                       <div class="room-title-row"><h2>{{ room.name }}</h2><span class="status-badge" [class.inactive]="!room.is_active">{{ room.is_active ? 'Activa' : 'Desactivada' }}</span></div>
                       <p class="room-description">{{ room.description }}</p>
                       <p class="room-meta">{{ room.catalog_category }} · {{ room.price_per_night | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }} / noche · hasta 13 personas</p>
@@ -235,43 +271,7 @@
             </section>
           }
         </div>
-        <aside class="bulk-options" aria-labelledby="bulk-options-title">
-          <div class="bulk-heading">
-            <div>
-              <p class="eyebrow">Acciones masivas</p>
-              <h2 id="bulk-options-title">Opciones</h2>
-            </div>
-            <label class="bulk-select-all">
-              <input type="checkbox" [checked]="allRoomsSelected()" [indeterminate]="someRoomsSelected()" (change)="selectAllRooms($event)" />
-              <span>Seleccionar todas</span>
-            </label>
-            <div class="bulk-selection-status" aria-live="polite">
-              <span>{{ selectedRoomCount() }} de {{ rooms()?.length ?? 0 }} seleccionadas</span>
-              @if (selectedRoomCount()) {
-                <button type="button" class="text-button" (click)="clearRoomSelection()">Quitar selección</button>
-              }
-            </div>
-          </div>
-          @if (!selectedRoomCount()) {
-            <p class="bulk-empty-selection">Marca una o varias habitaciones para activar acciones.</p>
-          }
-          <form [formGroup]="bulkPrices" (ngSubmit)="applyBulkAction('set_prices')" class="bulk-price-form">
-            <h3>Aplicar precios a la selección</h3>
-            <p class="bulk-section-note">Cada precio se aplica solo al tipo de alojamiento correspondiente.</p>
-            <label>Individual (€)<input type="number" formControlName="single_price" min="0" step="0.01" /></label>
-            <label>Doble (€)<input type="number" formControlName="double_price" min="0.01" step="0.01" /></label>
-            <label>Cama supletoria por huésped/noche (€)<input type="number" formControlName="extra_bed_price" min="0" step="0.01" /></label>
-            <label>Casa rural por noche (€)<input type="number" formControlName="rural_house_price" min="0.01" step="0.01" /></label>
-            <button type="submit" class="secondary-button" [disabled]="saving() || !selectedRoomCount() || bulkPrices.invalid">Actualizar precios</button>
-          </form>
-          <div class="bulk-actions">
-            <h3>Estado y eliminación</h3>
-            <button type="button" class="secondary-button" (click)="applyBulkAction('activate')" [disabled]="saving() || !selectedRoomCount()">Activar selección</button>
-            <button type="button" class="quiet-button" (click)="applyBulkAction('deactivate')" [disabled]="saving() || !selectedRoomCount()">Desactivar selección</button>
-            <button type="button" class="delete-button" (click)="applyBulkAction('delete')" [disabled]="saving() || !selectedRoomCount()">Eliminar selección</button>
-            <small>Los alojamientos con reservas históricas se conservan.</small>
-          </div>
-        </aside>
+
       </div>
     }
   </main>

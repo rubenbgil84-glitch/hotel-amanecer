@@ -515,7 +515,6 @@ export class ApiService {
     single_price?: number;
     double_price?: number;
     extra_bed_price?: number;
-    rural_house_price?: number;
   }) {
     return this.http.post<{ updated?: number; deleted?: number[]; retained?: Array<{ id: number; name: string }> }>(
       '/api/admin/rooms/bulk',
