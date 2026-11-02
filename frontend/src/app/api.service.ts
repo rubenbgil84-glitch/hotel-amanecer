@@ -239,6 +239,10 @@ export interface AdminBookingSummary {
   reservation_code: string;
   room_name: string;
   precheckin_completed_at: string | null;
+  invoice_id?: number | null;
+  invoice_number?: string | null;
+  delivery_note_id?: number | null;
+  delivery_note_number?: string | null;
 }
 
 export interface AdminBookingInput {

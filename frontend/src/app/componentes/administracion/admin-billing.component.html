@@ -1,0 +1,274 @@
+<div class="admin-page">
+  <header class="admin-header">
+    <div class="wrap admin-header-inner">
+      <a class="admin-brand" routerLink="/carmen-admin/dashboard">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>Hotel Amanecer <small>Facturación y Albaranes</small></span>
+      </a>
+      <a class="back-link" routerLink="/carmen-admin/dashboard">Volver al panel</a>
+    </div>
+  </header>
+
+  <main class="wrap bookings-content">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">Gestión contable</p>
+        <h1>Facturación</h1>
+        <p>
+          Emite facturas (con IVA desglosado y numeración propia) o albaranes asociados a las
+          reservas.
+        </p>
+      </div>
+      <span class="booking-count">{{ bookings().length }} registros</span>
+    </div>
+
+    @if (error()) {
+      <p class="message error-message" role="alert">{{ error() }}</p>
+    }
+    @if (notice()) {
+      <p class="message success-message" role="status">{{ notice() }}</p>
+    }
+
+    @if (loading()) {
+      <p class="empty-state" role="status">Cargando registros de facturación…</p>
+    } @else {
+      <!-- Barra de Filtros (Idéntica a la sección de Reservas) -->
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label for="dateFrom">Desde</label>
+          <input id="dateFrom" type="date" [formControl]="dateFromControl" class="date-input" />
+        </div>
+
+        <div class="filter-group">
+          <label for="dateTo">Hasta</label>
+          <input id="dateTo" type="date" [formControl]="dateToControl" class="date-input" />
+        </div>
+
+        <div class="filter-group">
+          <label>Factura</label>
+          <select [formControl]="invoiceFilterControl" class="filter-select">
+            <option value="">Todas</option>
+            <option value="billed">Facturadas</option>
+            <option value="pending">No facturadas</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>Albarán</label>
+          <select [formControl]="deliveryFilterControl" class="filter-select">
+            <option value="">Todos</option>
+            <option value="issued">Con albarán</option>
+            <option value="pending">Sin albarán</option>
+          </select>
+        </div>
+
+        <div class="filter-group search-group">
+          <label for="searchInput">Buscar</label>
+          <input
+            id="searchInput"
+            type="text"
+            [formControl]="searchControl"
+            placeholder="Nombre, DNI, teléfono, PIN o código"
+            class="search-input"
+          />
+        </div>
+
+        <div class="filter-actions">
+          <button class="primary-button filter-btn" type="button" (click)="loadData()">
+            Filtrar
+          </button>
+          <button class="secondary-button clear-btn" type="button" (click)="clearFilters()">
+            Limpiar
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla de Resultados con scroll -->
+      <div class="table-scroll">
+        <table class="booking-table">
+          <thead>
+            <tr>
+              <th>Reserva / Código</th>
+              <th>Huésped</th>
+              <th>Entrada / Salida</th>
+              <th>Estado Factura</th>
+              <th>Estado Albarán</th>
+              <th class="actions-header"><span class="visually-hidden">Acciones</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (booking of bookings(); track booking.id) {
+              <tr>
+                <td>
+                  <code>{{ booking.reservation_code }}</code>
+                </td>
+                <td>
+                  <strong>{{ booking.guest_name }}</strong>
+                  <small>{{ booking.room_name }}</small>
+                </td>
+                <td class="dates-cell">
+                  <span>{{ booking.check_in | date: 'dd/MM/yyyy' }}</span>
+                  <small>hasta {{ booking.check_out | date: 'dd/MM/yyyy' }}</small>
+                </td>
+                <td>
+                  <span class="status" [class.status-done]="booking.invoice_id">
+                    {{
+                      booking.invoice_id ? 'Emitida (' + booking.invoice_number + ')' : 'Pendiente'
+                    }}
+                  </span>
+                </td>
+                <td>
+                  <span class="status" [class.status-done]="booking.delivery_note_id">
+                    {{
+                      booking.delivery_note_id
+                        ? 'Emitido (' + booking.delivery_note_number + ')'
+                        : 'Pendiente'
+                    }}
+                  </span>
+                </td>
+                <td>
+                  <div class="row-actions">
+                    <!-- Botón Factura: Descarga directa si existe, o abre modal para crear -->
+                    <button
+                      class="icon-button"
+                      type="button"
+                      (click)="
+                        booking.invoice_id
+                          ? downloadPdf(booking.id, 'invoice', booking.invoice_number || '')
+                          : openBillingModal(booking, 'invoice')
+                      "
+                      [title]="
+                        booking.invoice_id
+                          ? 'Descargar Factura (' + booking.invoice_number + ')'
+                          : 'Crear Factura'
+                      "
+                    >
+                      {{ booking.invoice_id ? '📄F' : '➕F' }}
+                    </button>
+
+                    <!-- Botón Albarán: Descarga directa si existe, o abre modal para crear -->
+                    <button
+                      class="icon-button"
+                      type="button"
+                      (click)="
+                        booking.delivery_note_id
+                          ? downloadPdf(
+                              booking.id,
+                              'delivery_note',
+                              booking.delivery_note_number || ''
+                            )
+                          : openBillingModal(booking, 'delivery_note')
+                      "
+                      [title]="
+                        booking.delivery_note_id
+                          ? 'Descargar Albarán (' + booking.delivery_note_number + ')'
+                          : 'Crear Albarán'
+                      "
+                    >
+                      {{ booking.delivery_note_id ? '📄A' : '➕A' }}
+                    </button>
+
+                    <!-- Reenviar Factura por Email -->
+                    <button
+                      class="icon-button"
+                      type="button"
+                      [disabled]="!booking.invoice_id"
+                      (click)="resendDocument(booking.id, 'invoice', booking.email)"
+                      title="Reenviar Factura por Email"
+                    >
+                      ✉F
+                    </button>
+
+                    <!-- Reenviar Albarán por Email -->
+                    <button
+                      class="icon-button"
+                      type="button"
+                      [disabled]="!booking.delivery_note_id"
+                      (click)="resendDocument(booking.id, 'delivery_note', booking.email)"
+                      title="Reenviar Albarán por Email"
+                    >
+                      ✉A
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </main>
+
+  <!-- MODAL DE CONFIRMACIÓN Y EMISIÓN -->
+  @if (selectedBookingForBilling(); as booking) {
+    <div class="modal-backdrop" (click)="closeModal()">
+      <section
+        class="booking-modal"
+        role="dialog"
+        aria-modal="true"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="modal-heading">
+          <div>
+            <p class="eyebrow">
+              Emisión de
+              {{
+                activeDocType() === 'invoice'
+                  ? 'Factura (Con IVA desglosado)'
+                  : 'Albarán (Sin desglose de IVA)'
+              }}
+            </p>
+            <h2>Reserva {{ booking.reservation_code }}</h2>
+          </div>
+          <button class="quiet-button" type="button" (click)="closeModal()">Cerrar</button>
+        </div>
+
+        <div class="detail-grid">
+          <section class="detail-card detail-card--wide">
+            <h3>Datos del titular</h3>
+            <dl>
+              <dt>Huésped</dt>
+              <dd>{{ booking.guest_name }}</dd>
+              <dt>Documento (DNI/NIF)</dt>
+              <dd>{{ booking.identity_document || 'No indicado' }}</dd>
+              <dt>Estancia</dt>
+              <dd>
+                {{ booking.check_in | date: 'dd/MM/yyyy' }} al
+                {{ booking.check_out | date: 'dd/MM/yyyy' }}
+              </dd>
+              <dt>Régimen</dt>
+              <dd>{{ booking.room_name }}</dd>
+            </dl>
+            <p class="message warning-message" style="margin-top: 1rem">
+              @if (activeDocType() === 'invoice') {
+                Se asignará una <strong>numeración correlativa de factura oficial</strong> y se
+                calculará el desglose detallado de bases imponibles e IVA.
+              } @else {
+                Se asignará una <strong>numeración correlativa de albarán</strong> independiente de
+                la facturación.
+              }
+            </p>
+          </section>
+        </div>
+
+        <form [formGroup]="billingForm" (ngSubmit)="confirmAndGenerate()">
+          <label style="display: block; margin-top: 1rem; font-weight: 700">
+            Observaciones o notas adicionales para el documento:
+            <textarea
+              formControlName="notes"
+              rows="2"
+              style="width: 100%; margin-top: 0.4rem; padding: 0.5rem"
+            ></textarea>
+          </label>
+
+          <div class="modal-actions">
+            <button class="quiet-button" type="button" (click)="closeModal()">Cancelar</button>
+            <button class="primary-button" type="submit" [disabled]="saving()">
+              {{ saving() ? 'Generando y firmando…' : 'Confirmar y Descargar PDF' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  }
+</div>

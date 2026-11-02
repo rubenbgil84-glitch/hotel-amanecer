@@ -36,8 +36,13 @@
             <ul>
               @for (closure of upcomingClosures(); track closure.id) {
                 <li>
-                  <strong>{{ closure.start_date | date: 'dd/MM/yyyy' }} – {{ closure.end_date | date: 'dd/MM/yyyy' }}</strong>
-                  @if (closure.reason) { <span> · {{ closure.reason }}</span> }
+                  <strong
+                    >{{ closure.start_date | date: 'dd/MM/yyyy' }} –
+                    {{ closure.end_date | date: 'dd/MM/yyyy' }}</strong
+                  >
+                  @if (closure.reason) {
+                    <span> · {{ closure.reason }}</span>
+                  }
                 </li>
               }
             </ul>
@@ -98,6 +103,12 @@
         <h2>Mensajes</h2>
         <p>Solicitudes recibidas desde el formulario de contacto.</p>
         <span class="module-state">Gestionar mensajes →</span>
+      </a>
+      <a class="module-card" routerLink="/carmen-admin/facturacion">
+        <span class="module-icon" aria-hidden="true">08</span>
+        <h2>Facturación</h2>
+        <p>Emite facturas con IVA desglosado, albaranes y gestiona la numeración oficial.</p>
+        <span class="module-state">Gestionar facturación →</span>
       </a>
     </section>
   </section>

@@ -8,7 +8,15 @@ import {
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
-import {chmod, cp, mkdir, readFile, rename, rm, writeFile} from "node:fs/promises";
+import {
+  chmod,
+  cp,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import {dirname, join, relative, resolve, sep} from "node:path";
 import {fileURLToPath} from "node:url";
 import pg from "pg";
@@ -51,8 +59,8 @@ const {
   MAILGUN_DOMAIN = process.env.MAILGUN_SANDBOX_DOMAIN,
   MAILGUN_API_BASE_URL = process.env.MAILGUN_SANDBOX_URL,
   EMAIL_FROM,
-  MAILGUN_TEST_RECIPIENT =
-    process.env.EMAIL_TO?.match(/<([^>]+)>/)?.[1] ?? process.env.EMAIL_TO,
+  MAILGUN_TEST_RECIPIENT = process.env.EMAIL_TO?.match(/<([^>]+)>/)?.[1] ??
+    process.env.EMAIL_TO,
   HOTEL_CONTACT_EMAIL = EMAIL_FROM,
   HOTEL_DATA_DIR,
   FRONTEND_PORT = "4200",
@@ -191,8 +199,7 @@ Para consultas sobre este sitio puede utilizar el teléfono indicado o escribir 
 
 Este texto es un borrador general y no sustituye la revisión jurídica. Complete los campos entre corchetes y confirme los datos del titular, registro y condiciones efectivas del establecimiento antes de publicar.`,
   cookies_policy_title: "Política de cookies",
-  cookies_policy_content:
-    `1. Qué tecnologías utiliza este sitio
+  cookies_policy_content: `1. Qué tecnologías utiliza este sitio
 Actualmente no se activan cookies de analítica ni de publicidad. Para recordar la elección realizada en el aviso de cookies, el sitio guarda en el almacenamiento local del navegador la preferencia (aceptada o rechazada) y su fecha de caducidad durante 180 días. Esta información permite no mostrar de nuevo el aviso en cada visita y no se utiliza para identificarle con fines publicitarios.
 
 El sitio también puede usar almacenamiento de sesión del navegador para conservar temporalmente los datos de una búsqueda de disponibilidad mientras se navega por el proceso de reserva. Este dato es funcional y no se utiliza para publicidad.
@@ -208,8 +215,12 @@ Las cookies y tecnologías de almacenamiento pueden cambiar si se incorporan nue
 Este texto describe la configuración actualmente implementada. Revíselo si se incorporan herramientas, proveedores o cookies adicionales, y complete el contacto de privacidad antes de publicarlo.`,
 };
 const siteSettingKeys = Object.keys(siteSettingDefaults);
-const bundledImageRoot = fileURLToPath(new URL("../assets/imagenes/", import.meta.url));
-const imageStorageRoot = HOTEL_DATA_DIR ? resolve(HOTEL_DATA_DIR, "imagenes") : bundledImageRoot;
+const bundledImageRoot = fileURLToPath(
+  new URL("../assets/imagenes/", import.meta.url),
+);
+const imageStorageRoot = HOTEL_DATA_DIR
+  ? resolve(HOTEL_DATA_DIR, "imagenes")
+  : bundledImageRoot;
 const documentStorageRoot = join(imageStorageRoot, "pre-checking");
 const roomImageStorageRoot = join(imageStorageRoot, "habitaciones");
 const webImageStorageRoot = join(imageStorageRoot, "web");
@@ -273,7 +284,14 @@ async function getVatRates(queryable = pool) {
   return rows;
 }
 
-async function calculateStoredVat(queryable, checkIn, checkOut, pricing, discountAmount, serviceLines = []) {
+async function calculateStoredVat(
+  queryable,
+  checkIn,
+  checkOut,
+  pricing,
+  discountAmount,
+  serviceLines = [],
+) {
   const rates = await getVatRates(queryable);
   if (serviceLines.length) {
     return calculateCategorizedVatBreakdown({
@@ -323,13 +341,18 @@ function priceServices(catalog, selections, travelers, nights) {
     new Set(selectedIds).size !== selectedIds.length ||
     catalog.length !== selectedIds.length
   ) {
-    return {error: "Uno o más servicios seleccionados ya no están disponibles."};
+    return {
+      error: "Uno o más servicios seleccionados ya no están disponibles.",
+    };
   }
   const catalogById = new Map(catalog.map((service) => [service.id, service]));
   const lines = [];
   for (const selection of selections) {
     const service = catalogById.get(selection.service_id);
-    if (!service) return {error: "Uno o más servicios seleccionados ya no están disponibles."};
+    if (!service)
+      return {
+        error: "Uno o más servicios seleccionados ya no están disponibles.",
+      };
     let pricedLine;
     try {
       pricedLine = calculateServiceLine(service, {
@@ -339,7 +362,9 @@ function priceServices(catalog, selections, travelers, nights) {
       });
     } catch (error) {
       if (!(error instanceof RangeError)) throw error;
-      return {error: `No se pudo calcular el servicio ${service.name}: ${error.message}`};
+      return {
+        error: `No se pudo calcular el servicio ${service.name}: ${error.message}`,
+      };
     }
     lines.push({
       service_id: service.id,
@@ -355,13 +380,14 @@ function priceServices(catalog, selections, travelers, nights) {
 
 function repriceStoredServices(lines, travelers, nights) {
   return lines.map((line) => {
-    const quantity = line.pricing_unit === "per_person_night"
-      ? travelers * nights
-      : line.pricing_unit === "per_night"
-        ? nights
-        : line.pricing_unit === "per_stay"
-          ? 1
-          : Number(line.quantity);
+    const quantity =
+      line.pricing_unit === "per_person_night"
+        ? travelers * nights
+        : line.pricing_unit === "per_night"
+          ? nights
+          : line.pricing_unit === "per_stay"
+            ? 1
+            : Number(line.quantity);
     return {
       ...line,
       quantity,
@@ -397,14 +423,32 @@ app.get("/api/admin/services", requireAdmin, async (_req, res, next) => {
 });
 
 app.post("/api/admin/services", requireAdmin, async (req, res, next) => {
-  const {name, price, pricing_unit, vat_category = "other", is_active = true} = req.body ?? {};
+  const {
+    name,
+    price,
+    pricing_unit,
+    vat_category = "other",
+    is_active = true,
+  } = req.body ?? {};
   if (
-    typeof name !== "string" || name.trim().length < 2 || name.trim().length > 100 ||
-    typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 100000 ||
-    !["per_person_night", "per_stay", "per_night", "per_unit"].includes(pricing_unit) ||
-    !["lodging", "other"].includes(vat_category) || typeof is_active !== "boolean"
+    typeof name !== "string" ||
+    name.trim().length < 2 ||
+    name.trim().length > 100 ||
+    typeof price !== "number" ||
+    !Number.isFinite(price) ||
+    price < 0 ||
+    price > 100000 ||
+    !["per_person_night", "per_stay", "per_night", "per_unit"].includes(
+      pricing_unit,
+    ) ||
+    !["lodging", "other"].includes(vat_category) ||
+    typeof is_active !== "boolean"
   ) {
-    return res.status(400).json({errors: ["Revisa el nombre, precio, unidad de cobro y categoría de IVA del servicio."]});
+    return res.status(400).json({
+      errors: [
+        "Revisa el nombre, precio, unidad de cobro y categoría de IVA del servicio.",
+      ],
+    });
   }
   try {
     const {rows} = await pool.query(
@@ -421,15 +465,32 @@ app.post("/api/admin/services", requireAdmin, async (req, res, next) => {
 
 app.put("/api/admin/services/:id", requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
-  const {name, price, pricing_unit, vat_category = "other", is_active} = req.body ?? {};
+  const {
+    name,
+    price,
+    pricing_unit,
+    vat_category = "other",
+    is_active,
+  } = req.body ?? {};
   if (
-    !Number.isInteger(id) || id < 1 ||
-    typeof name !== "string" || name.trim().length < 2 || name.trim().length > 100 ||
-    typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 100000 ||
-    !["per_person_night", "per_stay", "per_night", "per_unit"].includes(pricing_unit) ||
-    !["lodging", "other"].includes(vat_category) || typeof is_active !== "boolean"
+    !Number.isInteger(id) ||
+    id < 1 ||
+    typeof name !== "string" ||
+    name.trim().length < 2 ||
+    name.trim().length > 100 ||
+    typeof price !== "number" ||
+    !Number.isFinite(price) ||
+    price < 0 ||
+    price > 100000 ||
+    !["per_person_night", "per_stay", "per_night", "per_unit"].includes(
+      pricing_unit,
+    ) ||
+    !["lodging", "other"].includes(vat_category) ||
+    typeof is_active !== "boolean"
   ) {
-    return res.status(400).json({errors: ["Revisa el servicio y sus opciones."]});
+    return res
+      .status(400)
+      .json({errors: ["Revisa el servicio y sus opciones."]});
   }
   try {
     const {rows} = await pool.query(
@@ -440,7 +501,10 @@ app.put("/api/admin/services/:id", requireAdmin, async (req, res, next) => {
         RETURNING id, code, name, price::float8 AS price, pricing_unit, vat_category, is_active`,
       [id, name.trim(), price, pricing_unit, vat_category, is_active],
     );
-    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado el servicio."]});
+    if (!rows.length)
+      return res
+        .status(404)
+        .json({errors: ["No se ha encontrado el servicio."]});
     res.json(rows[0]);
   } catch (error) {
     next(error);
@@ -466,8 +530,17 @@ app.get("/api/admin/vat-rates", requireAdmin, async (_req, res, next) => {
 
 app.post("/api/admin/vat-rates", requireAdmin, async (req, res, next) => {
   const {effective_from, rate, vat_category = "lodging"} = req.body ?? {};
-  if (!isDate(effective_from) || typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 || rate > 100 || !["lodging", "other"].includes(vat_category))
-    return res.status(400).json({errors: ["Indica una fecha y un porcentaje de IVA válidos (0–100)."]});
+  if (
+    !isDate(effective_from) ||
+    typeof rate !== "number" ||
+    !Number.isFinite(rate) ||
+    rate < 0 ||
+    rate > 100 ||
+    !["lodging", "other"].includes(vat_category)
+  )
+    return res.status(400).json({
+      errors: ["Indica una fecha y un porcentaje de IVA válidos (0–100)."],
+    });
   try {
     const {rows} = await pool.query(
       `INSERT INTO vat_rates (vat_category, effective_from, rate)
@@ -485,17 +558,34 @@ app.post("/api/admin/vat-rates", requireAdmin, async (req, res, next) => {
 app.put("/api/admin/vat-rates/:id", requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
   const {effective_from, rate, vat_category = "lodging"} = req.body ?? {};
-  if (!Number.isInteger(id) || id < 1 || !isDate(effective_from) || typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 || rate > 100 || !["lodging", "other"].includes(vat_category))
-    return res.status(400).json({errors: ["El tipo, el porcentaje o la fecha del IVA no son válidos."]});
+  if (
+    !Number.isInteger(id) ||
+    id < 1 ||
+    !isDate(effective_from) ||
+    typeof rate !== "number" ||
+    !Number.isFinite(rate) ||
+    rate < 0 ||
+    rate > 100 ||
+    !["lodging", "other"].includes(vat_category)
+  )
+    return res.status(400).json({
+      errors: ["El tipo, el porcentaje o la fecha del IVA no son válidos."],
+    });
   try {
     const {rows: currentRates} = await pool.query(
       "SELECT vat_category FROM vat_rates WHERE id = $1",
       [id],
     );
     if (!currentRates.length)
-      return res.status(404).json({errors: ["No se ha encontrado el tipo de IVA."]});
+      return res
+        .status(404)
+        .json({errors: ["No se ha encontrado el tipo de IVA."]});
     if (currentRates[0].vat_category !== vat_category)
-      return res.status(400).json({errors: ["No se puede cambiar la categoría de un tipo de IVA existente."]});
+      return res.status(400).json({
+        errors: [
+          "No se puede cambiar la categoría de un tipo de IVA existente.",
+        ],
+      });
     const {rows: earliestRates} = await pool.query(
       "SELECT id, effective_from::text AS effective_from FROM vat_rates WHERE vat_category = $1 ORDER BY effective_from LIMIT 1",
       [vat_category],
@@ -505,7 +595,9 @@ app.put("/api/admin/vat-rates/:id", requireAdmin, async (req, res, next) => {
       String(earliestRates[0].effective_from).slice(0, 10) !== effective_from
     ) {
       return res.status(409).json({
-        errors: ["No se puede cambiar la fecha del tipo de IVA inicial, porque debe cubrir todas las estancias."],
+        errors: [
+          "No se puede cambiar la fecha del tipo de IVA inicial, porque debe cubrir todas las estancias.",
+        ],
       });
     }
     const {rows} = await pool.query(
@@ -516,11 +608,15 @@ app.put("/api/admin/vat-rates/:id", requireAdmin, async (req, res, next) => {
       [id, vat_category, effective_from, rate],
     );
     if (!rows.length)
-      return res.status(404).json({errors: ["No se ha encontrado el tipo de IVA."]});
+      return res
+        .status(404)
+        .json({errors: ["No se ha encontrado el tipo de IVA."]});
     res.json(rows[0]);
   } catch (error) {
     if (error.code === "23505")
-      return res.status(409).json({errors: ["Ya existe un tipo de IVA configurado para esa fecha."]});
+      return res.status(409).json({
+        errors: ["Ya existe un tipo de IVA configurado para esa fecha."],
+      });
     next(error);
   }
 });
@@ -536,15 +632,23 @@ app.delete("/api/admin/vat-rates/:id", requireAdmin, async (req, res, next) => {
     );
     const {rows: earliest} = deletedRate.length
       ? await pool.query(
-        "SELECT id FROM vat_rates WHERE vat_category = $1 ORDER BY effective_from LIMIT 1",
-        [deletedRate[0].vat_category],
-      )
+          "SELECT id FROM vat_rates WHERE vat_category = $1 ORDER BY effective_from LIMIT 1",
+          [deletedRate[0].vat_category],
+        )
       : {rows: []};
     if (earliest[0]?.id === id)
-      return res.status(409).json({errors: ["No se puede eliminar el primer tipo de IVA de una categoría, porque es necesario para calcular reservas."]});
-    const {rowCount} = await pool.query("DELETE FROM vat_rates WHERE id = $1", [id]);
+      return res.status(409).json({
+        errors: [
+          "No se puede eliminar el primer tipo de IVA de una categoría, porque es necesario para calcular reservas.",
+        ],
+      });
+    const {rowCount} = await pool.query("DELETE FROM vat_rates WHERE id = $1", [
+      id,
+    ]);
     if (!rowCount)
-      return res.status(404).json({errors: ["No se ha encontrado el tipo de IVA."]});
+      return res
+        .status(404)
+        .json({errors: ["No se ha encontrado el tipo de IVA."]});
     res.json({ok: true});
   } catch (error) {
     next(error);
@@ -716,12 +820,22 @@ const decodeDocumentImage = (dataUrl) => {
 };
 const decodeRoomImage = decodeDocumentImage;
 function isAllowedSiteImageUrl(value) {
-  if (/^\/api\/web-images\/(?:hotel\.png|(?:hero|intro|experience|casa-rural)\.webp)$/.test(value)) return true;
+  if (
+    /^\/api\/web-images\/(?:hotel\.png|(?:hero|intro|experience|casa-rural)\.webp)$/.test(
+      value,
+    )
+  )
+    return true;
   try {
     const url = new URL(value);
     if (url.origin !== process.env.SUPABASE_URL) return false;
     const prefix = `/storage/v1/object/public/${storageBuckets.public}/site/`;
-    return url.pathname.startsWith(prefix) && /^(?:[0-9a-f-]{36}-)?(?:hotel\.png|(?:hero|intro|experience|casa-rural)\.webp)$/.test(url.pathname.slice(prefix.length));
+    return (
+      url.pathname.startsWith(prefix) &&
+      /^(?:[0-9a-f-]{36}-)?(?:hotel\.png|(?:hero|intro|experience|casa-rural)\.webp)$/.test(
+        url.pathname.slice(prefix.length),
+      )
+    );
   } catch {
     return false;
   }
@@ -801,7 +915,11 @@ async function sendContactEmails({name, email, phone, subject, message}) {
     "",
     `Gracias por contactar con ${site.site_name}.`,
   ].join("\n");
-  const emailShell = (preheader, content, footer) => `<div style="margin:0;padding:28px 12px;background:#f7f5ef;font-family:Arial,Helvetica,sans-serif;color:#292b27;line-height:1.6">
+  const emailShell = (
+    preheader,
+    content,
+    footer,
+  ) => `<div style="margin:0;padding:28px 12px;background:#f7f5ef;font-family:Arial,Helvetica,sans-serif;color:#292b27;line-height:1.6">
     <span style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden">${preheader}</span>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;margin:0 auto;border:1px solid #e6e2d9;background:#ffffff">
       <tr>
@@ -983,22 +1101,31 @@ async function sendBookingConfirmationEmail({
     siteName: escapeHtml(site.site_name),
   };
   const guestSummary = `${adults} ${adults === 1 ? "adulto" : "adultos"}${children ? ` · ${children} ${children === 1 ? "niño" : "niños"}` : ""}`;
-  const hasBreakfast = breakfast || services.some((service) => service.code === "breakfast");
+  const hasBreakfast =
+    breakfast || services.some((service) => service.code === "breakfast");
   const hasPets = pets || services.some((service) => service.code === "pets");
   const breakfastSummary = hasBreakfast ? "Incluido" : "No incluido";
   const petsSummary = hasPets ? "Sí" : "No";
   const serviceTextLines = services.map(
-    (service) => `${service.service_name}: ${formatCurrency(Number(service.total))}`,
+    (service) =>
+      `${service.service_name}: ${formatCurrency(Number(service.total))}`,
   );
-  const serviceHtmlRows = services.map(
-    (service) => `<tr><td style="padding:8px 0;color:#50564e;font-size:14px;">${escapeHtml(service.service_name)}</td><td align="right" style="padding:8px 0;color:#50564e;font-size:14px;">${escapeHtml(formatCurrency(service.total))}</td></tr>`,
-  ).join("");
+  const serviceHtmlRows = services
+    .map(
+      (service) =>
+        `<tr><td style="padding:8px 0;color:#50564e;font-size:14px;">${escapeHtml(service.service_name)}</td><td align="right" style="padding:8px 0;color:#50564e;font-size:14px;">${escapeHtml(formatCurrency(service.total))}</td></tr>`,
+    )
+    .join("");
   const vatTextLines = vatBreakdown.map(
-    (item) => `IVA incluido (${item.vat_category === "other" ? "otros servicios" : "alojamiento"}, ${item.rate}%): base ${formatCurrency(item.taxable_base)} · IVA ${formatCurrency(item.vat)}`,
+    (item) =>
+      `IVA incluido (${item.vat_category === "other" ? "otros servicios" : "alojamiento"}, ${item.rate}%): base ${formatCurrency(item.taxable_base)} · IVA ${formatCurrency(item.vat)}`,
   );
-  const vatHtmlRows = vatBreakdown.map(
-    (item) => `<tr><td style="padding:8px 0;color:#50564e;font-size:13px;">IVA ${item.vat_category === "other" ? "otros servicios · " : "alojamiento · "}${escapeHtml(String(item.rate))}%</td><td align="right" style="padding:8px 0;color:#50564e;font-size:13px;">Base ${escapeHtml(formatCurrency(item.taxable_base))} · IVA ${escapeHtml(formatCurrency(item.vat))}</td></tr>`,
-  ).join("");
+  const vatHtmlRows = vatBreakdown
+    .map(
+      (item) =>
+        `<tr><td style="padding:8px 0;color:#50564e;font-size:13px;">IVA ${item.vat_category === "other" ? "otros servicios · " : "alojamiento · "}${escapeHtml(String(item.rate))}%</td><td align="right" style="padding:8px 0;color:#50564e;font-size:13px;">Base ${escapeHtml(formatCurrency(item.taxable_base))} · IVA ${escapeHtml(formatCurrency(item.vat))}</td></tr>`,
+    )
+    .join("");
   const text = [
     `¡Reserva confirmada, ${guestName}!`,
     `${site.site_name} · ${reference}`,
@@ -1029,7 +1156,9 @@ async function sendBookingConfirmationEmail({
       ? serviceTextLines
       : [
           ...(breakfast ? [`Desayuno: ${formatCurrency(breakfastTotal)}`] : []),
-          ...(pets ? [`Suplemento de mascotas: ${formatCurrency(petsTotal)}`] : []),
+          ...(pets
+            ? [`Suplemento de mascotas: ${formatCurrency(petsTotal)}`]
+            : []),
         ]),
     ...(discountAmount
       ? [
@@ -1340,7 +1469,10 @@ function galleryRateLimitReached(req, action, limit) {
   const key = `${action}:${ip}`;
   const entry = gallerySubmissions.get(key);
   if (!entry || entry.resetAt <= now) {
-    gallerySubmissions.set(key, {count: 1, resetAt: now + galleryRateLimitWindowMs});
+    gallerySubmissions.set(key, {
+      count: 1,
+      resetAt: now + galleryRateLimitWindowMs,
+    });
     return false;
   }
   entry.count += 1;
@@ -1348,18 +1480,32 @@ function galleryRateLimitReached(req, action, limit) {
 }
 
 function validGalleryAlbumId(value) {
-  return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
+  return (
+    /^\d+$/.test(value) &&
+    Number.isSafeInteger(Number(value)) &&
+    Number(value) > 0
+  );
 }
 
 function validateGalleryAlbum(body) {
   const errors = [];
-  if (typeof body.title !== "string" || body.title.trim().length < 2 || body.title.trim().length > 120) {
+  if (
+    typeof body.title !== "string" ||
+    body.title.trim().length < 2 ||
+    body.title.trim().length > 120
+  ) {
     errors.push("El título debe tener entre 2 y 120 caracteres.");
   }
-  if (typeof body.description !== "string" || body.description.trim().length > 3000) {
+  if (
+    typeof body.description !== "string" ||
+    body.description.trim().length > 3000
+  ) {
     errors.push("La descripción no puede superar los 3000 caracteres.");
   }
-  if (typeof body.allow_comments !== "boolean" || typeof body.allow_uploads !== "boolean") {
+  if (
+    typeof body.allow_comments !== "boolean" ||
+    typeof body.allow_uploads !== "boolean"
+  ) {
     errors.push("Las opciones de comentarios y subida deben ser válidas.");
   }
   return errors;
@@ -1370,10 +1516,17 @@ function validateGalleryImage(body) {
   if (!decodeRoomImage(body.image_data_url)) {
     errors.push("La imagen debe ser JPG, PNG o WebP y no superar los 5 MB.");
   }
-  if (body.caption !== undefined && (typeof body.caption !== "string" || body.caption.trim().length > 240)) {
+  if (
+    body.caption !== undefined &&
+    (typeof body.caption !== "string" || body.caption.trim().length > 240)
+  ) {
     errors.push("El pie de foto no puede superar los 240 caracteres.");
   }
-  if (body.submitted_by !== undefined && (typeof body.submitted_by !== "string" || body.submitted_by.trim().length > 80)) {
+  if (
+    body.submitted_by !== undefined &&
+    (typeof body.submitted_by !== "string" ||
+      body.submitted_by.trim().length > 80)
+  ) {
     errors.push("El nombre no puede superar los 80 caracteres.");
   }
   return errors;
@@ -1385,10 +1538,20 @@ async function storeGalleryImage(album, imageDataUrl) {
   const objectPath = `gallery/${album.slug}/${randomUUID()}.webp`;
   const optimized = await sharp(image.buffer, {limitInputPixels: 30_000_000})
     .rotate()
-    .resize({width: 2000, height: 1600, fit: "inside", withoutEnlargement: true})
+    .resize({
+      width: 2000,
+      height: 1600,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
     .webp({quality: 82})
     .toBuffer();
-  await uploadStorageObject(storageBuckets.public, objectPath, optimized, "image/webp");
+  await uploadStorageObject(
+    storageBuckets.public,
+    objectPath,
+    optimized,
+    "image/webp",
+  );
   return {objectPath, imageUrl: publicStorageUrl(objectPath)};
 }
 
@@ -1420,7 +1583,8 @@ app.get("/api/gallery/albums/:slug", async (req, res, next) => {
          FROM gallery_albums WHERE slug = $1`,
       [req.params.slug],
     );
-    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    if (!albums.length)
+      return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
     const album = albums[0];
     const [{rows: photos}, {rows: comments}] = await Promise.all([
       pool.query(
@@ -1439,35 +1603,61 @@ app.get("/api/gallery/albums/:slug", async (req, res, next) => {
         [album.id],
       ),
     ]);
-    res.set("Cache-Control", "public, max-age=60").json({...album, photos, comments});
+    res
+      .set("Cache-Control", "public, max-age=60")
+      .json({...album, photos, comments});
   } catch (error) {
     next(error);
   }
 });
 
 app.post("/api/gallery/albums/:slug/comments", async (req, res, next) => {
-  const displayName = typeof req.body?.display_name === "string" ? req.body.display_name.trim() : "";
-  const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
-  if (displayName.length < 2 || displayName.length > 80 || message.length < 2 || message.length > 1500) {
-    return res.status(400).json({errors: ["Indica un nombre de 2 a 80 caracteres y un comentario de 2 a 1500 caracteres."]});
+  const displayName =
+    typeof req.body?.display_name === "string"
+      ? req.body.display_name.trim()
+      : "";
+  const message =
+    typeof req.body?.message === "string" ? req.body.message.trim() : "";
+  if (
+    displayName.length < 2 ||
+    displayName.length > 80 ||
+    message.length < 2 ||
+    message.length > 1500
+  ) {
+    return res.status(400).json({
+      errors: [
+        "Indica un nombre de 2 a 80 caracteres y un comentario de 2 a 1500 caracteres.",
+      ],
+    });
   }
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  if (!isSameOrigin(req))
+    return res.status(403).json({errors: ["Solicitud no permitida."]});
   if (galleryRateLimitReached(req, "comment", 8)) {
-    return res.status(429).json({errors: ["Has enviado varios comentarios recientemente. Inténtalo más tarde."]});
+    return res.status(429).json({
+      errors: [
+        "Has enviado varios comentarios recientemente. Inténtalo más tarde.",
+      ],
+    });
   }
   try {
     const {rows: albums} = await pool.query(
       "SELECT id, allow_comments FROM gallery_albums WHERE slug = $1",
       [req.params.slug],
     );
-    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
-    if (!albums[0].allow_comments) return res.status(403).json({errors: ["Este álbum no admite comentarios."]});
+    if (!albums.length)
+      return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    if (!albums[0].allow_comments)
+      return res
+        .status(403)
+        .json({errors: ["Este álbum no admite comentarios."]});
     await pool.query(
       `INSERT INTO gallery_comments (album_id, display_name, message)
        VALUES ($1, $2, $3)`,
       [albums[0].id, displayName, message],
     );
-    res.status(201).json({ok: true, message: "Comentario enviado para revisión."});
+    res
+      .status(201)
+      .json({ok: true, message: "Comentario enviado para revisión."});
   } catch (error) {
     next(error);
   }
@@ -1475,13 +1665,19 @@ app.post("/api/gallery/albums/:slug/comments", async (req, res, next) => {
 
 app.post("/api/gallery/albums/:slug/photos", async (req, res, next) => {
   const errors = validateGalleryImage(req.body ?? {});
-  if (typeof req.body?.submitted_by !== "string" || req.body.submitted_by.trim().length < 2) {
+  if (
+    typeof req.body?.submitted_by !== "string" ||
+    req.body.submitted_by.trim().length < 2
+  ) {
     errors.push("Indica tu nombre (entre 2 y 80 caracteres).");
   }
   if (errors.length) return res.status(400).json({errors});
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
+  if (!isSameOrigin(req))
+    return res.status(403).json({errors: ["Solicitud no permitida."]});
   if (galleryRateLimitReached(req, "photo", 5)) {
-    return res.status(429).json({errors: ["Has enviado varias fotos recientemente. Inténtalo más tarde."]});
+    return res.status(429).json({
+      errors: ["Has enviado varias fotos recientemente. Inténtalo más tarde."],
+    });
   }
   let saved;
   try {
@@ -1489,23 +1685,41 @@ app.post("/api/gallery/albums/:slug/photos", async (req, res, next) => {
       "SELECT id, slug, allow_uploads FROM gallery_albums WHERE slug = $1",
       [req.params.slug],
     );
-    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
+    if (!albums.length)
+      return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
     const album = albums[0];
-    if (!album.allow_uploads) return res.status(403).json({errors: ["Este álbum no admite nuevas fotos."]});
+    if (!album.allow_uploads)
+      return res
+        .status(403)
+        .json({errors: ["Este álbum no admite nuevas fotos."]});
     saved = await storeGalleryImage(album, req.body.image_data_url);
     const {rows} = await pool.query(
       `INSERT INTO gallery_photos (album_id, object_path, image_url, caption, submitted_by)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, status`,
-      [album.id, saved.objectPath, saved.imageUrl, req.body.caption?.trim() ?? "", req.body.submitted_by.trim()],
+      [
+        album.id,
+        saved.objectPath,
+        saved.imageUrl,
+        req.body.caption?.trim() ?? "",
+        req.body.submitted_by.trim(),
+      ],
     );
-    res.status(201).json({ok: true, status: rows[0].status, message: "Foto recibida. Aparecerá en el álbum cuando la apruebe el equipo."});
+    res.status(201).json({
+      ok: true,
+      status: rows[0].status,
+      message:
+        "Foto recibida. Aparecerá en el álbum cuando la apruebe el equipo.",
+    });
   } catch (error) {
     if (saved) {
       try {
         await removeStorageObjects(storageBuckets.public, [saved.objectPath]);
       } catch (cleanupError) {
-        console.error("No se pudo retirar una foto de galería tras fallar su registro.", cleanupError);
+        console.error(
+          "No se pudo retirar una foto de galería tras fallar su registro.",
+          cleanupError,
+        );
       }
     }
     next(error);
@@ -1527,42 +1741,69 @@ app.get("/api/admin/gallery/albums", requireAdmin, async (_req, res, next) => {
   }
 });
 
-app.get("/api/admin/gallery/albums/:id", requireAdmin, async (req, res, next) => {
-  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["El álbum indicado no es válido."]});
-  try {
-    const {rows: albums} = await pool.query("SELECT * FROM gallery_albums WHERE id = $1", [req.params.id]);
-    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
-    const album = albums[0];
-    const [{rows: photos}, {rows: comments}] = await Promise.all([
-      pool.query(
-        `SELECT id, image_url, caption, submitted_by, status, created_at, moderated_at
+app.get(
+  "/api/admin/gallery/albums/:id",
+  requireAdmin,
+  async (req, res, next) => {
+    if (!validGalleryAlbumId(req.params.id))
+      return res
+        .status(400)
+        .json({errors: ["El álbum indicado no es válido."]});
+    try {
+      const {rows: albums} = await pool.query(
+        "SELECT * FROM gallery_albums WHERE id = $1",
+        [req.params.id],
+      );
+      if (!albums.length)
+        return res
+          .status(404)
+          .json({errors: ["No se ha encontrado el álbum."]});
+      const album = albums[0];
+      const [{rows: photos}, {rows: comments}] = await Promise.all([
+        pool.query(
+          `SELECT id, image_url, caption, submitted_by, status, created_at, moderated_at
            FROM gallery_photos WHERE album_id = $1 ORDER BY created_at DESC, id DESC`,
-        [album.id],
-      ),
-      pool.query(
-        `SELECT id, display_name, message, status, created_at, moderated_at
+          [album.id],
+        ),
+        pool.query(
+          `SELECT id, display_name, message, status, created_at, moderated_at
            FROM gallery_comments WHERE album_id = $1 ORDER BY created_at DESC, id DESC`,
-        [album.id],
-      ),
-    ]);
-    res.set("Cache-Control", "no-store").json({...album, photos, comments});
-  } catch (error) {
-    next(error);
-  }
-});
+          [album.id],
+        ),
+      ]);
+      res.set("Cache-Control", "no-store").json({...album, photos, comments});
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 app.post("/api/admin/gallery/albums", requireAdmin, async (req, res, next) => {
   const errors = validateGalleryAlbum(req.body ?? {});
   if (errors.length) return res.status(400).json({errors});
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
-  const slugBase = req.body.title.trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) || "album";
+  if (!isSameOrigin(req))
+    return res.status(403).json({errors: ["Solicitud no permitida."]});
+  const slugBase =
+    req.body.title
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 70) || "album";
   const slug = `${slugBase}-${randomUUID().slice(0, 8)}`;
   try {
     const {rows} = await pool.query(
       `INSERT INTO gallery_albums (slug, title, description, allow_comments, allow_uploads)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [slug, req.body.title.trim(), req.body.description.trim(), req.body.allow_comments, req.body.allow_uploads],
+      [
+        slug,
+        req.body.title.trim(),
+        req.body.description.trim(),
+        req.body.allow_comments,
+        req.body.allow_uploads,
+      ],
     );
     res.status(201).json(rows[0]);
   } catch (error) {
@@ -1570,121 +1811,222 @@ app.post("/api/admin/gallery/albums", requireAdmin, async (req, res, next) => {
   }
 });
 
-app.put("/api/admin/gallery/albums/:id", requireAdmin, async (req, res, next) => {
-  const errors = validateGalleryAlbum(req.body ?? {});
-  if (errors.length) return res.status(400).json({errors});
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
-  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["El álbum indicado no es válido."]});
-  try {
-    const {rows} = await pool.query(
-      `UPDATE gallery_albums
+app.put(
+  "/api/admin/gallery/albums/:id",
+  requireAdmin,
+  async (req, res, next) => {
+    const errors = validateGalleryAlbum(req.body ?? {});
+    if (errors.length) return res.status(400).json({errors});
+    if (!isSameOrigin(req))
+      return res.status(403).json({errors: ["Solicitud no permitida."]});
+    if (!validGalleryAlbumId(req.params.id))
+      return res
+        .status(400)
+        .json({errors: ["El álbum indicado no es válido."]});
+    try {
+      const {rows} = await pool.query(
+        `UPDATE gallery_albums
           SET title = $2, description = $3, allow_comments = $4, allow_uploads = $5, updated_at = now()
         WHERE id = $1 RETURNING *`,
-      [req.params.id, req.body.title.trim(), req.body.description.trim(), req.body.allow_comments, req.body.allow_uploads],
-    );
-    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
-    res.json(rows[0]);
-  } catch (error) {
-    next(error);
-  }
-});
+        [
+          req.params.id,
+          req.body.title.trim(),
+          req.body.description.trim(),
+          req.body.allow_comments,
+          req.body.allow_uploads,
+        ],
+      );
+      if (!rows.length)
+        return res
+          .status(404)
+          .json({errors: ["No se ha encontrado el álbum."]});
+      res.json(rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
-app.post("/api/admin/gallery/albums/:id/photos", requireAdmin, async (req, res, next) => {
-  const errors = validateGalleryImage(req.body ?? {});
-  if (errors.length) return res.status(400).json({errors});
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
-  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["El álbum indicado no es válido."]});
-  let saved;
-  try {
-    const {rows: albums} = await pool.query("SELECT id, slug FROM gallery_albums WHERE id = $1", [req.params.id]);
-    if (!albums.length) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
-    saved = await storeGalleryImage(albums[0], req.body.image_data_url);
-    const {rows} = await pool.query(
-      `INSERT INTO gallery_photos (album_id, object_path, image_url, caption, status, moderated_at)
+app.post(
+  "/api/admin/gallery/albums/:id/photos",
+  requireAdmin,
+  async (req, res, next) => {
+    const errors = validateGalleryImage(req.body ?? {});
+    if (errors.length) return res.status(400).json({errors});
+    if (!isSameOrigin(req))
+      return res.status(403).json({errors: ["Solicitud no permitida."]});
+    if (!validGalleryAlbumId(req.params.id))
+      return res
+        .status(400)
+        .json({errors: ["El álbum indicado no es válido."]});
+    let saved;
+    try {
+      const {rows: albums} = await pool.query(
+        "SELECT id, slug FROM gallery_albums WHERE id = $1",
+        [req.params.id],
+      );
+      if (!albums.length)
+        return res
+          .status(404)
+          .json({errors: ["No se ha encontrado el álbum."]});
+      saved = await storeGalleryImage(albums[0], req.body.image_data_url);
+      const {rows} = await pool.query(
+        `INSERT INTO gallery_photos (album_id, object_path, image_url, caption, status, moderated_at)
        VALUES ($1, $2, $3, $4, 'approved', now())
        RETURNING id, image_url, caption, submitted_by, status, created_at, moderated_at`,
-      [albums[0].id, saved.objectPath, saved.imageUrl, req.body.caption?.trim() ?? ""],
-    );
-    res.status(201).json(rows[0]);
-  } catch (error) {
-    if (saved) {
-      try {
-        await removeStorageObjects(storageBuckets.public, [saved.objectPath]);
-      } catch (cleanupError) {
-        console.error("No se pudo retirar una foto de galería tras fallar su registro.", cleanupError);
+        [
+          albums[0].id,
+          saved.objectPath,
+          saved.imageUrl,
+          req.body.caption?.trim() ?? "",
+        ],
+      );
+      res.status(201).json(rows[0]);
+    } catch (error) {
+      if (saved) {
+        try {
+          await removeStorageObjects(storageBuckets.public, [saved.objectPath]);
+        } catch (cleanupError) {
+          console.error(
+            "No se pudo retirar una foto de galería tras fallar su registro.",
+            cleanupError,
+          );
+        }
       }
+      next(error);
     }
-    next(error);
-  }
-});
+  },
+);
 
-app.patch("/api/admin/gallery/photos/:id", requireAdmin, async (req, res, next) => {
-  if (!validGalleryAlbumId(req.params.id) || !["approved", "rejected"].includes(req.body?.status)) {
-    return res.status(400).json({errors: ["El estado de moderación no es válido."]});
-  }
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
-  try {
-    const admin = await getAuthenticatedAdmin(req);
-    if (!admin) return res.status(401).json({errors: ["Debes iniciar sesión como administrador."]});
-    const {rows} = await pool.query(
-      `UPDATE gallery_photos SET status = $2, moderated_at = now(), moderated_by = $3
+app.patch(
+  "/api/admin/gallery/photos/:id",
+  requireAdmin,
+  async (req, res, next) => {
+    if (
+      !validGalleryAlbumId(req.params.id) ||
+      !["approved", "rejected"].includes(req.body?.status)
+    ) {
+      return res
+        .status(400)
+        .json({errors: ["El estado de moderación no es válido."]});
+    }
+    if (!isSameOrigin(req))
+      return res.status(403).json({errors: ["Solicitud no permitida."]});
+    try {
+      const admin = await getAuthenticatedAdmin(req);
+      if (!admin)
+        return res
+          .status(401)
+          .json({errors: ["Debes iniciar sesión como administrador."]});
+      const {rows} = await pool.query(
+        `UPDATE gallery_photos SET status = $2, moderated_at = now(), moderated_by = $3
         WHERE id = $1 RETURNING id, status, moderated_at`,
-      [req.params.id, req.body.status, admin.id],
-    );
-    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado la foto."]});
-    res.json(rows[0]);
-  } catch (error) {
-    next(error);
-  }
-});
+        [req.params.id, req.body.status, admin.id],
+      );
+      if (!rows.length)
+        return res.status(404).json({errors: ["No se ha encontrado la foto."]});
+      res.json(rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
-app.patch("/api/admin/gallery/comments/:id", requireAdmin, async (req, res, next) => {
-  if (!validGalleryAlbumId(req.params.id) || !["approved", "rejected"].includes(req.body?.status)) {
-    return res.status(400).json({errors: ["El estado de moderación no es válido."]});
-  }
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
-  try {
-    const admin = await getAuthenticatedAdmin(req);
-    if (!admin) return res.status(401).json({errors: ["Debes iniciar sesión como administrador."]});
-    const {rows} = await pool.query(
-      `UPDATE gallery_comments SET status = $2, moderated_at = now(), moderated_by = $3
+app.patch(
+  "/api/admin/gallery/comments/:id",
+  requireAdmin,
+  async (req, res, next) => {
+    if (
+      !validGalleryAlbumId(req.params.id) ||
+      !["approved", "rejected"].includes(req.body?.status)
+    ) {
+      return res
+        .status(400)
+        .json({errors: ["El estado de moderación no es válido."]});
+    }
+    if (!isSameOrigin(req))
+      return res.status(403).json({errors: ["Solicitud no permitida."]});
+    try {
+      const admin = await getAuthenticatedAdmin(req);
+      if (!admin)
+        return res
+          .status(401)
+          .json({errors: ["Debes iniciar sesión como administrador."]});
+      const {rows} = await pool.query(
+        `UPDATE gallery_comments SET status = $2, moderated_at = now(), moderated_by = $3
         WHERE id = $1 RETURNING id, status, moderated_at`,
-      [req.params.id, req.body.status, admin.id],
-    );
-    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado el comentario."]});
-    res.json(rows[0]);
-  } catch (error) {
-    next(error);
-  }
-});
+        [req.params.id, req.body.status, admin.id],
+      );
+      if (!rows.length)
+        return res
+          .status(404)
+          .json({errors: ["No se ha encontrado el comentario."]});
+      res.json(rows[0]);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
-app.delete("/api/admin/gallery/photos/:id", requireAdmin, async (req, res, next) => {
-  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["La foto indicada no es válida."]});
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
-  try {
-    const {rows} = await pool.query("SELECT object_path FROM gallery_photos WHERE id = $1", [req.params.id]);
-    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado la foto."]});
-    await removeStorageObjects(storageBuckets.public, [rows[0].object_path]);
-    await pool.query("DELETE FROM gallery_photos WHERE id = $1", [req.params.id]);
-    res.json({ok: true});
-  } catch (error) {
-    next(error);
-  }
-});
+app.delete(
+  "/api/admin/gallery/photos/:id",
+  requireAdmin,
+  async (req, res, next) => {
+    if (!validGalleryAlbumId(req.params.id))
+      return res.status(400).json({errors: ["La foto indicada no es válida."]});
+    if (!isSameOrigin(req))
+      return res.status(403).json({errors: ["Solicitud no permitida."]});
+    try {
+      const {rows} = await pool.query(
+        "SELECT object_path FROM gallery_photos WHERE id = $1",
+        [req.params.id],
+      );
+      if (!rows.length)
+        return res.status(404).json({errors: ["No se ha encontrado la foto."]});
+      await removeStorageObjects(storageBuckets.public, [rows[0].object_path]);
+      await pool.query("DELETE FROM gallery_photos WHERE id = $1", [
+        req.params.id,
+      ]);
+      res.json({ok: true});
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
-app.delete("/api/admin/gallery/albums/:id", requireAdmin, async (req, res, next) => {
-  if (!validGalleryAlbumId(req.params.id)) return res.status(400).json({errors: ["El álbum indicado no es válido."]});
-  if (!isSameOrigin(req)) return res.status(403).json({errors: ["Solicitud no permitida."]});
-  try {
-    const {rows: photos} = await pool.query("SELECT object_path FROM gallery_photos WHERE album_id = $1", [req.params.id]);
-    await removeStorageObjects(storageBuckets.public, photos.map((photo) => photo.object_path));
-    const {rowCount} = await pool.query("DELETE FROM gallery_albums WHERE id = $1", [req.params.id]);
-    if (!rowCount) return res.status(404).json({errors: ["No se ha encontrado el álbum."]});
-    res.json({ok: true});
-  } catch (error) {
-    next(error);
-  }
-});
+app.delete(
+  "/api/admin/gallery/albums/:id",
+  requireAdmin,
+  async (req, res, next) => {
+    if (!validGalleryAlbumId(req.params.id))
+      return res
+        .status(400)
+        .json({errors: ["El álbum indicado no es válido."]});
+    if (!isSameOrigin(req))
+      return res.status(403).json({errors: ["Solicitud no permitida."]});
+    try {
+      const {rows: photos} = await pool.query(
+        "SELECT object_path FROM gallery_photos WHERE album_id = $1",
+        [req.params.id],
+      );
+      await removeStorageObjects(
+        storageBuckets.public,
+        photos.map((photo) => photo.object_path),
+      );
+      const {rowCount} = await pool.query(
+        "DELETE FROM gallery_albums WHERE id = $1",
+        [req.params.id],
+      );
+      if (!rowCount)
+        return res
+          .status(404)
+          .json({errors: ["No se ha encontrado el álbum."]});
+      res.json({ok: true});
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 app.get("/api/testimonial-invitations/:token", async (req, res, next) => {
   const {token} = req.params;
@@ -2484,23 +2826,17 @@ app.post("/api/contact", async (req, res, next) => {
          now()
        )
        RETURNING id`,
-      [
-        name.trim(),
-        contactEmail,
-        phone.trim(),
-        subject.trim(),
-        message.trim(),
-      ],
+      [name.trim(), contactEmail, phone.trim(), subject.trim(), message.trim()],
     );
     const contactMessageId = rows[0].id;
     let notificationSent = true;
     try {
       await sendContactEmails({
-      name: name.trim(),
-      email: contactEmail,
-      phone: phone.trim(),
-      subject: subject.trim(),
-      message: message.trim(),
+        name: name.trim(),
+        email: contactEmail,
+        phone: phone.trim(),
+        subject: subject.trim(),
+        message: message.trim(),
       });
     } catch (emailError) {
       notificationSent = false;
@@ -2710,17 +3046,24 @@ function safePrecheckinFilePath(storedPath) {
 }
 
 function safePrecheckinObjectPath(storedPath) {
-  if (typeof storedPath !== "string" || !storedPath.startsWith("storage:")) return null;
+  if (typeof storedPath !== "string" || !storedPath.startsWith("storage:"))
+    return null;
   const objectPath = storedPath.slice("storage:".length);
-  if (!objectPath.startsWith("pre-checking/") || objectPath.split("/").some((part) => !part || part === "." || part === "..")) return null;
+  if (
+    !objectPath.startsWith("pre-checking/") ||
+    objectPath.split("/").some((part) => !part || part === "." || part === "..")
+  )
+    return null;
   return objectPath;
 }
 
 async function readPrecheckinDocument(storedPath) {
   const objectPath = safePrecheckinObjectPath(storedPath);
-  if (objectPath) return downloadStorageObject(storageBuckets.private, objectPath);
+  if (objectPath)
+    return downloadStorageObject(storageBuckets.private, objectPath);
   const filePath = safePrecheckinFilePath(storedPath);
-  if (!filePath) throw new Error("La ruta del documento de pre-check-in no es válida.");
+  if (!filePath)
+    throw new Error("La ruta del documento de pre-check-in no es válida.");
   return readFile(filePath);
 }
 
@@ -3274,8 +3617,14 @@ async function createBookingPdf(booking, {includePrecheckin = true} = {}) {
         : []),
       ...(Array.isArray(booking.vat_breakdown)
         ? booking.vat_breakdown.flatMap((item) => [
-            [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
-            [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
+            [
+              `IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`,
+              formatCurrency(Number(item.taxable_base)),
+            ],
+            [
+              `IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`,
+              formatCurrency(Number(item.vat)),
+            ],
           ])
         : []),
       ["TOTAL", formatCurrency(Number(booking.total))],
@@ -3402,12 +3751,23 @@ async function createPrecheckinPdf(booking) {
             ])
           : []),
         ...(Number(booking.discount_amount) > 0
-          ? [[`Descuento${booking.discount_code ? ` · ${booking.discount_code}` : ""}`, `−${formatCurrency(Number(booking.discount_amount))}`]]
+          ? [
+              [
+                `Descuento${booking.discount_code ? ` · ${booking.discount_code}` : ""}`,
+                `−${formatCurrency(Number(booking.discount_amount))}`,
+              ],
+            ]
           : []),
         ...(Array.isArray(booking.vat_breakdown)
           ? booking.vat_breakdown.flatMap((item) => [
-              [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
-              [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
+              [
+                `IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`,
+                formatCurrency(Number(item.taxable_base)),
+              ],
+              [
+                `IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`,
+                formatCurrency(Number(item.vat)),
+              ],
             ])
           : []),
         ["Total", formatCurrency(Number(booking.total))],
@@ -3622,12 +3982,23 @@ async function sendPrecheckinCompletedEmail(booking, pdfAttachment) {
             ])
           : []),
         ...(Number(booking.discount_amount) > 0
-          ? [[`Descuento${booking.discount_code ? ` · ${booking.discount_code}` : ""}`, `−${formatCurrency(Number(booking.discount_amount))}`]]
+          ? [
+              [
+                `Descuento${booking.discount_code ? ` · ${booking.discount_code}` : ""}`,
+                `−${formatCurrency(Number(booking.discount_amount))}`,
+              ],
+            ]
           : []),
         ...(Array.isArray(booking.vat_breakdown)
           ? booking.vat_breakdown.flatMap((item) => [
-              [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
-              [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
+              [
+                `IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`,
+                formatCurrency(Number(item.taxable_base)),
+              ],
+              [
+                `IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`,
+                formatCurrency(Number(item.vat)),
+              ],
             ])
           : []),
         ["Total", formatCurrency(Number(booking.total))],
@@ -4370,6 +4741,468 @@ app.get(
     }
   },
 );
+// --- MÓDULO DE FACTURACIÓN Y ALBARANES ---
+
+// Listado de documentos emitidos o consulta general de reservas para facturar
+app.get("/api/admin/billing", requireAdmin, async (req, res, next) => {
+  const search =
+    typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const invoiceStatus =
+    typeof req.query.invoice === "string" ? req.query.invoice : "";
+  const deliveryStatus =
+    typeof req.query.delivery === "string" ? req.query.delivery : "";
+  const dateFrom =
+    typeof req.query.date_from === "string" ? req.query.date_from.trim() : "";
+  const dateTo =
+    typeof req.query.date_to === "string" ? req.query.date_to.trim() : "";
+
+  try {
+    let query = `
+      SELECT b.id AS booking_id, b.reservation_code, b.guest_name, b.email, b.identity_document, b.check_in, b.check_out,
+             b.total::float8 AS total, r.name AS room_name,
+             inv.id AS invoice_id, inv.document_number AS invoice_number,
+             dlv.id AS delivery_note_id, dlv.document_number AS delivery_note_number
+        FROM bookings b
+        JOIN rooms r ON r.id = b.room_id
+        LEFT JOIN billing_documents inv ON inv.booking_id = b.id AND inv.document_type = 'invoice'
+        LEFT JOIN billing_documents dlv ON dlv.booking_id = b.id AND dlv.document_type = 'delivery_note'
+       WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+
+    if (search) {
+      query += ` AND (b.guest_name ILIKE $${paramIndex} OR b.reservation_code ILIKE $${paramIndex} OR b.identity_document ILIKE $${paramIndex} OR b.email ILIKE $${paramIndex} OR inv.document_number ILIKE $${paramIndex} OR dlv.document_number ILIKE $${paramIndex})`;
+      params.push(`%${search}%`);
+      paramIndex++;
+    }
+
+    if (dateFrom) {
+      query += ` AND b.check_in >= $${paramIndex}`;
+      params.push(dateFrom);
+      paramIndex++;
+    }
+
+    if (dateTo) {
+      query += ` AND b.check_out <= $${paramIndex}`;
+      params.push(dateTo);
+      paramIndex++;
+    }
+
+    if (invoiceStatus === "billed") {
+      query += ` AND inv.id IS NOT NULL`;
+    } else if (invoiceStatus === "pending") {
+      query += ` AND inv.id IS NULL`;
+    }
+
+    if (deliveryStatus === "issued") {
+      query += ` AND dlv.id IS NOT NULL`;
+    } else if (deliveryStatus === "pending") {
+      query += ` AND dlv.id IS NULL`;
+    }
+
+    query += ` ORDER BY b.check_in DESC`;
+
+    const {rows} = await pool.query(query, params);
+    res.set("Cache-Control", "no-store").json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Generar Factura o Albarán de forma correlativa e independiente
+app.post("/api/admin/billing", requireAdmin, async (req, res, next) => {
+  const {booking_id, document_type, notes = ""} = req.body ?? {};
+  if (
+    !Number.isInteger(booking_id) ||
+    booking_id < 1 ||
+    !["invoice", "delivery_note"].includes(document_type)
+  ) {
+    return res.status(400).json({
+      errors: ["Los datos para generar el documento no son válidos."],
+    });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const {rows: bookingRows} = await client.query(
+      `SELECT b.id, b.total, b.room_subtotal, b.vat_breakdown 
+         FROM bookings b WHERE b.id = $1 FOR UPDATE`,
+      [booking_id],
+    );
+    if (!bookingRows.length) {
+      await client.query("ROLLBACK");
+      return res
+        .status(404)
+        .json({errors: ["No se ha encontrado la reserva."]});
+    }
+    const booking = bookingRows[0];
+
+    const {rows: existingDoc} = await client.query(
+      `SELECT id, document_number FROM billing_documents WHERE booking_id = $1 AND document_type = $2`,
+      [booking_id, document_type],
+    );
+    if (existingDoc.length) {
+      await client.query("ROLLBACK");
+      return res.json({
+        ok: true,
+        id: existingDoc[0].id,
+        document_number: existingDoc[0].document_number,
+      });
+    }
+
+    const prefix = document_type === "invoice" ? "FAC" : "ALB";
+    const year = new Date().getFullYear();
+    const {rows: seqRows} = await client.query(
+      `SELECT COUNT(*)::int AS count FROM billing_documents WHERE document_type = $1 AND EXTRACT(YEAR FROM created_at) = $2`,
+      [document_type, year],
+    );
+    const nextNum = (seqRows[0]?.count || 0) + 1;
+    const document_number = `${prefix}-${year}-${String(nextNum).padStart(4, "0")}`;
+
+    const subtotal = Number(booking.room_subtotal);
+    const total = Number(booking.total);
+    const vat_amount =
+      document_type === "invoice" ? Math.max(0, total - subtotal) : 0;
+    const vat_breakdown_json =
+      document_type === "invoice"
+        ? JSON.stringify(booking.vat_breakdown || [])
+        : null;
+
+    const {rows: inserted} = await client.query(
+      `INSERT INTO billing_documents 
+         (booking_id, document_type, document_number, subtotal, vat_amount, total, vat_breakdown_json, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, document_number`,
+      [
+        booking_id,
+        document_type,
+        document_number,
+        subtotal,
+        vat_amount,
+        total,
+        vat_breakdown_json,
+        notes.trim(),
+      ],
+    );
+
+    await client.query("COMMIT");
+    res.status(201).json({
+      ok: true,
+      id: inserted[0].id,
+      document_number: inserted[0].document_number,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    next(error);
+  } finally {
+    client.release();
+  }
+});
+
+// Descargar PDF de Factura o Albarán generado
+app.get("/api/admin/billing/:id/pdf", requireAdmin, async (req, res, next) => {
+  const bookingId = Number(req.params.id);
+  const type = req.query.type; // 'invoice' o 'delivery_note'
+  if (
+    !Number.isInteger(bookingId) ||
+    bookingId < 1 ||
+    !["invoice", "delivery_note"].includes(type)
+  ) {
+    return res
+      .status(400)
+      .json({errors: ["Parámetros de documento no válidos."]});
+  }
+
+  try {
+    const {rows} = await pool.query(
+      `SELECT d.document_number, d.subtotal, d.vat_amount, d.total, d.vat_breakdown_json, d.notes, d.created_at,
+              b.reservation_code, b.guest_name, b.identity_document, b.email, b.phone,
+              b.check_in, b.check_out, b.adults, b.children, r.name AS room_name
+         FROM billing_documents d
+         JOIN bookings b ON b.id = d.booking_id
+         JOIN rooms r ON r.id = b.room_id
+        WHERE d.booking_id = $1 AND d.document_type = $2`,
+      [bookingId, type],
+    );
+    if (!rows.length) {
+      return res.status(404).json({
+        errors: ["No se ha encontrado el documento de facturación registrado."],
+      });
+    }
+    const doc = rows[0];
+
+    // Usar el generador unificado de PDF corporativo
+    const pdfBuffer = await generateBillingPdfBuffer(doc, type);
+
+    res
+      .set({
+        "Cache-Control": "no-store",
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${type === "invoice" ? "factura" : "albaran"}-${doc.document_number}.pdf"`,
+      })
+      .send(pdfBuffer);
+  } catch (error) {
+    next(error);
+  }
+});
+// Reenviar Factura o Albarán por email al huésped
+app.post(
+  "/api/admin/billing/:id/resend",
+  requireAdmin,
+  async (req, res, next) => {
+    const bookingId = Number(req.params.id);
+    const {type} = req.body ?? {};
+
+    if (
+      !Number.isInteger(bookingId) ||
+      bookingId < 1 ||
+      !["invoice", "delivery_note"].includes(type)
+    ) {
+      return res.status(400).json({errors: ["Parámetros no válidos."]});
+    }
+
+    try {
+      const {rows} = await pool.query(
+        `SELECT d.document_number, d.subtotal, d.vat_amount, d.total, d.vat_breakdown_json, d.notes, d.created_at,
+                b.reservation_code, b.guest_name, b.identity_document, b.email, b.phone,
+                b.check_in, b.check_out, b.adults, b.children, r.name AS room_name
+           FROM billing_documents d
+           JOIN bookings b ON b.id = d.booking_id
+           JOIN rooms r ON r.id = b.room_id
+          WHERE d.booking_id = $1 AND d.document_type = $2`,
+        [bookingId, type],
+      );
+
+      if (!rows.length) {
+        return res.status(404).json({
+          errors: [
+            "No se ha encontrado el documento registrado para esta reserva.",
+          ],
+        });
+      }
+
+      const doc = rows[0];
+      if (!doc.email) {
+        return res.status(400).json({
+          errors: [
+            "El huésped no tiene una dirección de correo electrónico asociada.",
+          ],
+        });
+      }
+
+      const pdfBuffer = await generateBillingPdfBuffer(doc, type);
+      const site = await readSiteSettings();
+
+      const docTypeName = type === "invoice" ? "Factura" : "Albarán";
+      const fileName = `${type === "invoice" ? "factura" : "albaran"}-${doc.document_number}.pdf`;
+
+      await mailer.sendMail({
+        from: EMAIL_FROM,
+        to: doc.email,
+        subject: `${docTypeName} ${doc.document_number} · ${site.site_name}`,
+        text: `Hola ${doc.guest_name},\n\nAdjunto encontrarás el documento correspondiente a tu estancia (${doc.document_number}).\n\nAtentamente,\n${site.site_name}`,
+        html: `
+        <div style="font-family:Arial,sans-serif;padding:20px;color:#292b27;">
+          <h2 style="color:#244536;">${docTypeName} ${doc.document_number}</h2>
+          <p>Hola <strong>${doc.guest_name}</strong>,</p>
+          <p>Adjunto encontrarás el documento correspondiente a tu estancia en ${site.site_name}.</p>
+          <hr style="border:none;border-top:1px solid #e6e2d9;margin:20px 0;" />
+          <p style="font-size:12px;color:#74766f;">${site.site_name} · ${site.site_address}</p>
+        </div>
+      `,
+        attachments: [
+          {
+            filename: fileName,
+            content: pdfBuffer,
+          },
+        ],
+      });
+
+      res.json({ok: true});
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// 5. Generador unificado de PDF con la plantilla visual idéntica a las reservas
+async function generateBillingPdfBuffer(doc, type) {
+  const site = await readSiteSettings();
+  const isInvoice = type === "invoice";
+  const title = isInvoice ? "FACTURA OFICIAL" : "ALBARÁN DE ENTREGA";
+
+  return new Promise((resolvePdf, rejectPdf) => {
+    const pdf = new PDFDocument({size: "A4", margin: 40});
+    const chunks = [];
+
+    const c = {
+      forest: "#244536",
+      gold: "#d9c8a4",
+      ink: "#242820",
+      muted: "#6b7168",
+      paper: "#f3f4ef",
+      border: "#e7e8e2",
+      white: "#ffffff",
+    };
+
+    pdf.on("data", (chunk) => chunks.push(chunk));
+    pdf.on("error", rejectPdf);
+    pdf.on("end", () => resolvePdf(Buffer.concat(chunks)));
+
+    // Header Bloque Verde Bosque
+    pdf.rect(0, 0, pdf.page.width, 110).fill(c.forest);
+
+    pdf
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor(c.gold)
+      .text(site.site_name.toUpperCase(), 40, 25, {characterSpacing: 1.5});
+
+    pdf
+      .font("Helvetica-Bold")
+      .fontSize(22)
+      .fillColor(c.white)
+      .text(title, 40, 42);
+
+    pdf
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor("#e5ebe5")
+      .text(
+        `Nº Documento: ${doc.document_number}  ·  Fecha emisión: ${new Date(doc.created_at).toLocaleDateString("es-ES")}`,
+        40,
+        78,
+      );
+
+    let y = 130;
+
+    // Caja de datos del Cliente y Estancia
+    pdf.rect(40, y, 515, 80).fillAndStroke(c.paper, c.border);
+
+    pdf
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor(c.muted)
+      .text("REFERENCIA DE RESERVA", 54, y + 12);
+    pdf
+      .font("Helvetica-Bold")
+      .fontSize(13)
+      .fillColor(c.ink)
+      .text(doc.reservation_code, 54, y + 24);
+
+    pdf
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor(c.muted)
+      .text("TITULAR Y CONTACTO", 280, y + 12);
+    pdf
+      .font("Helvetica")
+      .fontSize(10)
+      .fillColor(c.ink)
+      .text(doc.guest_name, 280, y + 24);
+    pdf
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(c.muted)
+      .text(
+        `DNI/NIF: ${doc.identity_document || "No indicado"} · ${doc.email || ""}`,
+        280,
+        y + 38,
+      );
+
+    pdf
+      .font("Helvetica-Bold")
+      .fontSize(9)
+      .fillColor(c.muted)
+      .text("ESTANCIA", 54, y + 50);
+    pdf
+      .font("Helvetica")
+      .fontSize(9)
+      .fillColor(c.ink)
+      .text(
+        `${doc.room_name} (${formatDateForMessage(doc.check_in)} al ${formatDateForMessage(doc.check_out)})`,
+        54,
+        y + 62,
+      );
+
+    y += 100;
+
+    // Tabla de Desglose de Servicios
+    pdf.rect(40, y, 515, 24).fill(c.forest);
+    pdf.font("Helvetica-Bold").fontSize(9).fillColor(c.white);
+    pdf.text("CONCEPTO", 52, y + 7);
+    pdf.text("IMPORTE", 450, y + 7, {width: 90, align: "right"});
+    y += 24;
+
+    pdf.rect(40, y, 515, 32).fillAndStroke(c.white, c.border);
+    pdf.font("Helvetica").fontSize(10).fillColor(c.ink);
+    pdf.text(`Alojamiento y servicios en ${doc.room_name}`, 52, y + 10);
+    pdf.text(formatCurrency(Number(doc.total)), 450, y + 10, {
+      width: 90,
+      align: "right",
+    });
+    y += 45;
+
+    // Desglose de IVA (Solo en Factura)
+    if (isInvoice && doc.vat_breakdown_json) {
+      pdf
+        .font("Helvetica-Bold")
+        .fontSize(11)
+        .fillColor(c.forest)
+        .text("Desglose de IVA", 40, y);
+      y += 16;
+
+      try {
+        const breakdown =
+          typeof doc.vat_breakdown_json === "string"
+            ? JSON.parse(doc.vat_breakdown_json)
+            : doc.vat_breakdown_json;
+        if (Array.isArray(breakdown) && breakdown.length > 0) {
+          for (const item of breakdown) {
+            pdf.rect(40, y, 515, 22).fillAndStroke(c.paper, c.border);
+            pdf.font("Helvetica").fontSize(9).fillColor(c.muted);
+            pdf.text(
+              `IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} (${item.rate}%)`,
+              52,
+              y + 6,
+            );
+            pdf.text(
+              `Base: ${formatCurrency(Number(item.taxable_base))}   |   Cuota IVA: ${formatCurrency(Number(item.vat))}`,
+              300,
+              y + 6,
+              {width: 240, align: "right"},
+            );
+            y += 26;
+          }
+        }
+      } catch (e) {}
+      y += 10;
+    }
+
+    // Totales
+    pdf.rect(40, y, 515, 36).fill(c.forest);
+    pdf.font("Helvetica-Bold").fontSize(12).fillColor(c.white);
+    pdf.text("TOTAL DOCUMENTO", 52, y + 11);
+    pdf.text(formatCurrency(Number(doc.total)), 430, y + 11, {
+      width: 110,
+      align: "right",
+    });
+
+    y += 50;
+
+    // Pie de página corporativo
+    pdf.font("Helvetica").fontSize(9).fillColor(c.muted);
+    pdf.text(`${site.site_name}  ·  ${site.site_address}`, 40, y, {
+      align: "center",
+      width: 515,
+    });
+
+    pdf.end();
+  });
+}
 
 app.get("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
   const bookingId = Number(req.params.id);
@@ -4416,13 +5249,20 @@ app.get(
         [bookingId],
       );
       const storedPath = rows[0]?.document_path;
-      if (!safePrecheckinObjectPath(storedPath) && !safePrecheckinFilePath(storedPath))
+      if (
+        !safePrecheckinObjectPath(storedPath) &&
+        !safePrecheckinFilePath(storedPath)
+      )
         return res
           .status(404)
           .json({errors: ["No se ha encontrado el documento."]});
       const file = await readPrecheckinDocument(storedPath);
-      const contentType = file.toString("ascii", 0, 4) === "RIFF" ? "image/webp"
-        : file.toString("ascii", 1, 4) === "PNG" ? "image/png" : "image/jpeg";
+      const contentType =
+        file.toString("ascii", 0, 4) === "RIFF"
+          ? "image/webp"
+          : file.toString("ascii", 1, 4) === "PNG"
+            ? "image/png"
+            : "image/jpeg";
       res.set("Cache-Control", "no-store").type(contentType).send(file);
     } catch (error) {
       next(error);
@@ -4716,7 +5556,10 @@ app.put("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
       adults + children,
       basePricing.nights,
     );
-    for (const [code, selected] of [["breakfast", breakfast], ["pets", pets]]) {
+    for (const [code, selected] of [
+      ["breakfast", breakfast],
+      ["pets", pets],
+    ]) {
       const currentIndex = serviceLines.findIndex((line) => line.code === code);
       if (!selected) {
         if (currentIndex >= 0) serviceLines.splice(currentIndex, 1);
@@ -4731,7 +5574,9 @@ app.put("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
       if (!serviceRows.length) {
         await client.query("ROLLBACK");
         return res.status(409).json({
-          errors: [`El servicio ${code === "breakfast" ? "desayuno" : "mascotas"} ya no está disponible.`],
+          errors: [
+            `El servicio ${code === "breakfast" ? "desayuno" : "mascotas"} ya no está disponible.`,
+          ],
         });
       }
       const priced = priceServices(
@@ -4746,13 +5591,17 @@ app.put("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
       }
       serviceLines.push(priced.lines[0]);
     }
-    const breakfastTotal = serviceLines.find((line) => line.code === "breakfast")?.total ?? 0;
-    const petsTotal = serviceLines.find((line) => line.code === "pets")?.total ?? 0;
+    const breakfastTotal =
+      serviceLines.find((line) => line.code === "breakfast")?.total ?? 0;
+    const petsTotal =
+      serviceLines.find((line) => line.code === "pets")?.total ?? 0;
     const pricing = {
       ...basePricing,
       breakfastTotal,
       petsTotal,
-      total: basePricing.roomSubtotal + serviceLines.reduce((sum, line) => sum + line.total, 0),
+      total:
+        basePricing.roomSubtotal +
+        serviceLines.reduce((sum, line) => sum + line.total, 0),
     };
     const discountPercent = Number(current.discount_percent ?? 0);
     const discountAmount = discountPercent
@@ -5008,8 +5857,22 @@ async function saveRoomImage(slug, imageDataUrl) {
   const image = decodeRoomImage(imageDataUrl);
   if (!image) return null;
   const objectPath = `rooms/${slug}/${randomUUID()}.webp`;
-  const optimized = await sharp(image.buffer).rotate().resize({width: 2400, height: 1600, fit: "inside", withoutEnlargement: true}).webp({quality: 82}).toBuffer();
-  await uploadStorageObject(storageBuckets.public, objectPath, optimized, "image/webp");
+  const optimized = await sharp(image.buffer)
+    .rotate()
+    .resize({
+      width: 2400,
+      height: 1600,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({quality: 82})
+    .toBuffer();
+  await uploadStorageObject(
+    storageBuckets.public,
+    objectPath,
+    optimized,
+    "image/webp",
+  );
   return {
     imageUrl: publicStorageUrl(objectPath),
     objectPath,
@@ -5030,7 +5893,12 @@ async function saveWebImage(filename, imageDataUrl) {
     .webp({quality: 82})
     .toBuffer();
   const objectPath = `site/${randomUUID()}-${filename}`;
-  await uploadStorageObject(storageBuckets.public, objectPath, optimizedImage, "image/webp");
+  await uploadStorageObject(
+    storageBuckets.public,
+    objectPath,
+    optimizedImage,
+    "image/webp",
+  );
   return {
     imageUrl: publicStorageUrl(objectPath),
     objectPath,
@@ -5323,9 +6191,7 @@ app.post(
         promotion.starts_on
           ? `Válido desde el ${promotion.starts_on_display}`
           : "",
-        promotion.ends_on
-          ? `hasta el ${promotion.ends_on_display}`
-          : "",
+        promotion.ends_on ? `hasta el ${promotion.ends_on_display}` : "",
       ]
         .filter(Boolean)
         .join(" ");
@@ -5611,9 +6477,15 @@ app.post("/api/discount-codes/validate", async (req, res, next) => {
       `SELECT id, code, name, price::float8 AS price, pricing_unit, vat_category
          FROM service_catalog WHERE is_active ORDER BY id`,
     );
-    const selections = services ?? serviceCatalog
-      .filter((service) => (service.code === "breakfast" && breakfast) || (service.code === "pets" && pets))
-      .map((service) => ({service_id: service.id}));
+    const selections =
+      services ??
+      serviceCatalog
+        .filter(
+          (service) =>
+            (service.code === "breakfast" && breakfast) ||
+            (service.code === "pets" && pets),
+        )
+        .map((service) => ({service_id: service.id}));
     const pricedServices = priceServices(
       serviceCatalog,
       selections,
@@ -5625,7 +6497,9 @@ app.post("/api/discount-codes/validate", async (req, res, next) => {
     }
     const pricing = {
       ...basePricing,
-      total: basePricing.roomSubtotal + pricedServices.lines.reduce((sum, line) => sum + line.total, 0),
+      total:
+        basePricing.roomSubtotal +
+        pricedServices.lines.reduce((sum, line) => sum + line.total, 0),
     };
     const validation = await validateDiscountForStay(pool, {
       code,
@@ -5658,10 +6532,14 @@ app.post("/api/admin/rooms", requireAdmin, async (req, res, next) => {
   if (!slug) errors.push("El nombre no genera un identificador válido.");
   const imageDataUrls = Array.isArray(body.image_data_urls)
     ? body.image_data_urls
-    : body.image_data_url ? [body.image_data_url] : [];
+    : body.image_data_url
+      ? [body.image_data_url]
+      : [];
   const decodedImages = imageDataUrls.map(decodeRoomImage);
   if (imageDataUrls.length > 10 || decodedImages.some((image) => !image))
-    errors.push("Selecciona hasta 10 imágenes JPG, PNG o WebP de hasta 5 MB cada una.");
+    errors.push(
+      "Selecciona hasta 10 imágenes JPG, PNG o WebP de hasta 5 MB cada una.",
+    );
   if (errors.length) return res.status(400).json({errors});
 
   let roomId = null;
@@ -5696,7 +6574,8 @@ app.post("/api/admin/rooms", requireAdmin, async (req, res, next) => {
     );
     roomId = rows[0].id;
     if (decodedImages.length) {
-      for (const dataUrl of imageDataUrls) savedImages.push(await saveRoomImage(slug, dataUrl));
+      for (const dataUrl of imageDataUrls)
+        savedImages.push(await saveRoomImage(slug, dataUrl));
       const savedImage = savedImages[0];
       const {rows: updatedRows} = await pool.query(
         `UPDATE rooms SET image_url = $2
@@ -5720,7 +6599,11 @@ app.post("/api/admin/rooms", requireAdmin, async (req, res, next) => {
   } catch (error) {
     if (roomId !== null)
       await pool.query("DELETE FROM rooms WHERE id = $1", [roomId]);
-    await Promise.allSettled(savedImages.map((image) => removeStorageObjects(storageBuckets.public, [image.objectPath])));
+    await Promise.allSettled(
+      savedImages.map((image) =>
+        removeStorageObjects(storageBuckets.public, [image.objectPath]),
+      ),
+    );
     if (error.code === "23505") {
       return res.status(409).json({
         errors: ["Ya existe una habitación con un nombre equivalente."],
@@ -5738,11 +6621,17 @@ app.put("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
   const errors = validateRoomInput(body);
   const imageDataUrls = Array.isArray(body.image_data_urls)
     ? body.image_data_urls
-    : body.image_data_url ? [body.image_data_url] : [];
+    : body.image_data_url
+      ? [body.image_data_url]
+      : [];
   const decodedImages = imageDataUrls.map(decodeRoomImage);
-  const removeImageIds = Array.isArray(body.remove_image_ids) ? body.remove_image_ids : [];
+  const removeImageIds = Array.isArray(body.remove_image_ids)
+    ? body.remove_image_ids
+    : [];
   if (imageDataUrls.length > 10 || decodedImages.some((image) => !image))
-    errors.push("Selecciona hasta 10 imágenes JPG, PNG o WebP de hasta 5 MB cada una.");
+    errors.push(
+      "Selecciona hasta 10 imágenes JPG, PNG o WebP de hasta 5 MB cada una.",
+    );
   if (removeImageIds.some((id) => !Number.isInteger(id) || id < 1))
     errors.push("La selección de fotos para eliminar no es válida.");
   if (errors.length) return res.status(400).json({errors});
@@ -5758,15 +6647,25 @@ app.put("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
       return res
         .status(404)
         .json({errors: ["No se ha encontrado la habitación."]});
-    for (const dataUrl of imageDataUrls) savedImages.push(await saveRoomImage(existing.slug, dataUrl));
+    for (const dataUrl of imageDataUrls)
+      savedImages.push(await saveRoomImage(existing.slug, dataUrl));
     const {rows: currentImages} = await pool.query(
       "SELECT id, object_path, image_url, position FROM room_images WHERE room_id = $1 ORDER BY position, id",
       [roomId],
     );
-    const removedImages = currentImages.filter((image) => removeImageIds.includes(image.id));
-    const keptImages = currentImages.filter((image) => !removeImageIds.includes(image.id));
-    const mergedImages = [...keptImages, ...savedImages.map((image) => ({...image, id: null}))];
-    const imageUrl = mergedImages[0]?.image_url ?? (currentImages.length ? null : existing.image_url);
+    const removedImages = currentImages.filter((image) =>
+      removeImageIds.includes(image.id),
+    );
+    const keptImages = currentImages.filter(
+      (image) => !removeImageIds.includes(image.id),
+    );
+    const mergedImages = [
+      ...keptImages,
+      ...savedImages.map((image) => ({...image, id: null})),
+    ];
+    const imageUrl =
+      mergedImages[0]?.image_url ??
+      (currentImages.length ? null : existing.image_url);
     const {rows} = await pool.query(
       `UPDATE rooms
           SET name = $2, description = $3, price_per_night = $4, pricing_type = $5,
@@ -5799,17 +6698,37 @@ app.put("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
     for (const image of savedImages) {
       await pool.query(
         "INSERT INTO room_images (room_id, object_path, image_url, position) VALUES ($1, $2, $3, $4)",
-        [roomId, image.objectPath, image.imageUrl, mergedImages.findIndex((entry) => entry.objectPath === image.objectPath)],
+        [
+          roomId,
+          image.objectPath,
+          image.imageUrl,
+          mergedImages.findIndex(
+            (entry) => entry.objectPath === image.objectPath,
+          ),
+        ],
       );
     }
     if (removeImageIds.length) {
-      await pool.query("DELETE FROM room_images WHERE room_id = $1 AND id = ANY($2::bigint[])", [roomId, removeImageIds]);
-      await removeStorageObjects(storageBuckets.public, removedImages.map((image) => image.object_path));
+      await pool.query(
+        "DELETE FROM room_images WHERE room_id = $1 AND id = ANY($2::bigint[])",
+        [roomId, removeImageIds],
+      );
+      await removeStorageObjects(
+        storageBuckets.public,
+        removedImages.map((image) => image.object_path),
+      );
     }
-    await pool.query("UPDATE room_images SET position = position WHERE room_id = $1", [roomId]);
+    await pool.query(
+      "UPDATE room_images SET position = position WHERE room_id = $1",
+      [roomId],
+    );
     res.json({...rows[0]});
   } catch (error) {
-    await Promise.allSettled(savedImages.map((image) => removeStorageObjects(storageBuckets.public, [image.objectPath])));
+    await Promise.allSettled(
+      savedImages.map((image) =>
+        removeStorageObjects(storageBuckets.public, [image.objectPath]),
+      ),
+    );
     if (error.code === "23505") {
       return res.status(409).json({
         errors: ["Ya existe una habitación con un nombre equivalente."],
@@ -5836,7 +6755,10 @@ app.delete("/api/admin/rooms/:id", requireAdmin, async (req, res, next) => {
       return res
         .status(404)
         .json({errors: ["No se ha encontrado la habitación."]});
-    await removeStorageObjects(storageBuckets.public, roomImages.map((image) => image.object_path));
+    await removeStorageObjects(
+      storageBuckets.public,
+      roomImages.map((image) => image.object_path),
+    );
     await rm(join(roomImageStorageRoot, rows[0].slug), {
       recursive: true,
       force: true,
@@ -5950,9 +6872,12 @@ app.post("/api/admin/rooms/bulk", requireAdmin, async (req, res, next) => {
       ),
     );
     const deletedSet = new Set(deletedIds);
-    await removeStorageObjects(storageBuckets.public, imageObjects
-      .filter((image) => deletedSet.has(image.room_id))
-      .map((image) => image.object_path));
+    await removeStorageObjects(
+      storageBuckets.public,
+      imageObjects
+        .filter((image) => deletedSet.has(image.room_id))
+        .map((image) => image.object_path),
+    );
     res.json({
       deleted: deletedIds,
       retained: retained.map(({id, name}) => ({id, name})),
@@ -6311,9 +7236,15 @@ app.post("/api/bookings", async (req, res, next) => {
       `SELECT id, code, name, price::float8 AS price, pricing_unit, vat_category
          FROM service_catalog WHERE is_active ORDER BY id`,
     );
-    const selections = services ?? serviceCatalog
-      .filter((service) => (service.code === "breakfast" && breakfast) || (service.code === "pets" && pets))
-      .map((service) => ({service_id: service.id}));
+    const selections =
+      services ??
+      serviceCatalog
+        .filter(
+          (service) =>
+            (service.code === "breakfast" && breakfast) ||
+            (service.code === "pets" && pets),
+        )
+        .map((service) => ({service_id: service.id}));
     const pricedServices = priceServices(
       serviceCatalog,
       selections,
@@ -6325,13 +7256,17 @@ app.post("/api/bookings", async (req, res, next) => {
       return res.status(400).json({errors: [pricedServices.error]});
     }
     const serviceLines = pricedServices.lines;
-    const breakfastTotal = serviceLines.find((line) => line.code === "breakfast")?.total ?? 0;
-    const petsTotal = serviceLines.find((line) => line.code === "pets")?.total ?? 0;
+    const breakfastTotal =
+      serviceLines.find((line) => line.code === "breakfast")?.total ?? 0;
+    const petsTotal =
+      serviceLines.find((line) => line.code === "pets")?.total ?? 0;
     const pricing = {
       ...basePricing,
       breakfastTotal,
       petsTotal,
-      total: basePricing.roomSubtotal + serviceLines.reduce((sum, line) => sum + line.total, 0),
+      total:
+        basePricing.roomSubtotal +
+        serviceLines.reduce((sum, line) => sum + line.total, 0),
     };
     let activeDiscount = null;
     let discountAmount = 0;
@@ -6491,15 +7426,25 @@ app.post("/api/bookings", async (req, res, next) => {
       discount_amount: discountAmount,
       breakfast_total: breakfastTotal,
       pets_total: petsTotal,
-      services: serviceLines.map(({service_id, service_name, pricing_unit, quantity, unit_price, total, vat_category}) => ({
-        service_id,
-        service_name,
-        pricing_unit,
-        quantity,
-        unit_price,
-        total,
-        vat_category,
-      })),
+      services: serviceLines.map(
+        ({
+          service_id,
+          service_name,
+          pricing_unit,
+          quantity,
+          unit_price,
+          total,
+          vat_category,
+        }) => ({
+          service_id,
+          service_name,
+          pricing_unit,
+          quantity,
+          unit_price,
+          total,
+          vat_category,
+        }),
+      ),
       vat_breakdown: vatBreakdown,
     });
   } catch (err) {
@@ -6745,9 +7690,7 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
         .status(400)
         .json({errors: ["Indica el parentesco de los menores."]});
     }
-    if (
-      data.document_expiry_date < toDateOnly(booking.check_in)
-    ) {
+    if (data.document_expiry_date < toDateOnly(booking.check_in)) {
       await client.query("ROLLBACK");
       return res.status(400).json({
         errors: ["El documento debe estar vigente durante la estancia."],
@@ -6760,16 +7703,29 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
     const storageDirectory = String(booking.booking_id);
     const saveDocumentFile = async (filename, buffer, contentType) => {
       const objectPath = `pre-checking/${year}/${month}/${storageDirectory}/${randomUUID()}-${filename}`;
-      await uploadStorageObject(storageBuckets.private, objectPath, buffer, contentType);
+      await uploadStorageObject(
+        storageBuckets.private,
+        objectPath,
+        buffer,
+        contentType,
+      );
       uploadedDocumentPaths.push(objectPath);
       return `storage:${objectPath}`;
     };
     const frontFilename = `frontal.${frontImage.extension}`;
-    const frontDocumentPath = await saveDocumentFile(frontFilename, frontImage.buffer, `image/${frontImage.extension === "jpg" ? "jpeg" : frontImage.extension}`);
+    const frontDocumentPath = await saveDocumentFile(
+      frontFilename,
+      frontImage.buffer,
+      `image/${frontImage.extension === "jpg" ? "jpeg" : frontImage.extension}`,
+    );
     let backDocumentPath = null;
     if (backImage) {
       const backFilename = `trasera.${backImage.extension}`;
-      backDocumentPath = await saveDocumentFile(backFilename, backImage.buffer, `image/${backImage.extension === "jpg" ? "jpeg" : backImage.extension}`);
+      backDocumentPath = await saveDocumentFile(
+        backFilename,
+        backImage.buffer,
+        `image/${backImage.extension === "jpg" ? "jpeg" : backImage.extension}`,
+      );
     }
 
     await client.query(
@@ -6833,8 +7789,14 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
     if (!databaseCommitted) {
-      await removeStorageObjects(storageBuckets.private, uploadedDocumentPaths).catch((restoreError) => {
-        console.error("No se pudieron retirar los documentos tras fallar el pre-check-in.", restoreError);
+      await removeStorageObjects(
+        storageBuckets.private,
+        uploadedDocumentPaths,
+      ).catch((restoreError) => {
+        console.error(
+          "No se pudieron retirar los documentos tras fallar el pre-check-in.",
+          restoreError,
+        );
       });
     }
     next(error);
@@ -7350,34 +8312,34 @@ async function start() {
     `);
     await pool.query(await readFile(gallerySchemaPath, "utf8"));
     await pool.query(
-        `UPDATE site_settings
+      `UPDATE site_settings
             SET setting_value = $2, updated_at = now()
           WHERE setting_key = $1 AND setting_value = $3`,
-        [
-          "privacy_policy_content",
-          siteSettingDefaults.privacy_policy_content,
-          "Información pendiente de completar por el hotel.",
-        ],
+      [
+        "privacy_policy_content",
+        siteSettingDefaults.privacy_policy_content,
+        "Información pendiente de completar por el hotel.",
+      ],
     );
     await pool.query(
-        `UPDATE site_settings
+      `UPDATE site_settings
             SET setting_value = $2, updated_at = now()
           WHERE setting_key = $1 AND setting_value = $3`,
-        [
-          "legal_notice_content",
-          siteSettingDefaults.legal_notice_content,
-          "Información pendiente de completar por el hotel.",
-        ],
+      [
+        "legal_notice_content",
+        siteSettingDefaults.legal_notice_content,
+        "Información pendiente de completar por el hotel.",
+      ],
     );
     await pool.query(
-        `UPDATE site_settings
+      `UPDATE site_settings
             SET setting_value = $2, updated_at = now()
           WHERE setting_key = $1 AND setting_value = $3`,
-        [
-          "cookies_policy_content",
-          siteSettingDefaults.cookies_policy_content,
-          "Este sitio no utiliza cookies de análisis ni publicidad. Guarda en el almacenamiento local del navegador la preferencia del aviso de cookies durante 6 meses para no volver a mostrarlo. El acceso de administración puede emplear cookies técnicas necesarias para mantener la sesión.",
-        ],
+      [
+        "cookies_policy_content",
+        siteSettingDefaults.cookies_policy_content,
+        "Este sitio no utiliza cookies de análisis ni publicidad. Guarda en el almacenamiento local del navegador la preferencia del aviso de cookies durante 6 meses para no volver a mostrarlo. El acceso de administración puede emplear cookies técnicas necesarias para mantener la sesión.",
+      ],
     );
     for (const [key, value] of Object.entries(siteSettingDefaults)) {
       await pool.query(

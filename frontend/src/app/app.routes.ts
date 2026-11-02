@@ -6,6 +6,7 @@ import { SobreNosotros } from './componentes/sobre-nosotros/sobre-nosotros.compo
 import { LegalPage } from './componentes/legal-page.component';
 import { adminGuard } from './componentes/administracion/admin.guard';
 
+
 export const routes: Routes = [
   {
     path: '',
@@ -109,6 +110,12 @@ export const routes: Routes = [
         loadComponent: () => import('./componentes/administracion/configuracion-sitio.component').then((module) => module.ConfiguracionSitio),
         canActivate: [adminGuard],
         title: 'Configuración del sitio',
+      },
+      {
+        path: 'facturacion',
+        loadComponent: () => import('./componentes/administracion/admin-billing.component').then((module) => module.AdminBilling),
+        canActivate: [adminGuard],
+        title: 'Facturación y Albaranes',
       },
     ],
   },
