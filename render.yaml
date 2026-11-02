@@ -2,7 +2,7 @@ services:
   - type: web
     name: hotel-amanecer
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm ci --prefix backend && npm ci --prefix frontend && npm run build --prefix frontend
     startCommand: npm start --prefix backend
     healthCheckPath: /api/health
@@ -16,7 +16,13 @@ services:
         sync: false
       - key: ADMIN_JWT_SECRET
         generateValue: true
-      - key: RESEND_API_KEY
+      - key: MAILGUN_API_KEY
+        sync: false
+      - key: MAILGUN_DOMAIN
+        sync: false
+      - key: MAILGUN_API_BASE_URL
+        sync: false
+      - key: MAILGUN_TEST_RECIPIENT
         sync: false
       - key: EMAIL_FROM
         sync: false
