@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api",
-      "destination": "https://amanecer-staging-api-mxxm.onrender.com/api"
+      "destination": "https://hotel-amanecer.onrender.com/api"
     },
     {
       "source": "/api/(.*)",
-      "destination": "https://amanecer-staging-api-mxxm.onrender.com/api/$1"
+      "destination": "https://hotel-amanecer.onrender.com/api/$1"
     }
   ]
 }
