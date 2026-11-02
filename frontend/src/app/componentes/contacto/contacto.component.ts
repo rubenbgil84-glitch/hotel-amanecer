@@ -56,8 +56,14 @@ export class Contacto {
 
     this.sending.set(true);
     this.api.sendContact(this.form.getRawValue()).subscribe({
-      next: () => {
+      next: (result) => {
         this.sending.set(false);
+        if (!result.notification_sent) {
+          this.errors.set([
+            'El mensaje se ha guardado, pero no pudimos enviar el correo de confirmación. Contacta con el hotel por teléfono.',
+          ]);
+          return;
+        }
         this.sent.set(true);
         this.form.reset();
       },

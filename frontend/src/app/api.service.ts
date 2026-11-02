@@ -565,7 +565,7 @@ export class ApiService {
   }
 
   sendContact(input: ContactInput) {
-    return this.http.post<{ ok: boolean }>('/api/contact', input);
+    return this.http.post<{ ok: boolean; notification_sent: boolean }>('/api/contact', input);
   }
 
   adminSession() {
