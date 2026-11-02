@@ -226,6 +226,48 @@
   }
 }
 
+.service-options {
+  display: grid;
+  gap: .75rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+}
+
+.service-options legend {
+  padding-inline: .35rem;
+  font-weight: 700;
+}
+
+.service-option,
+.service-option > label:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.service-option > label:first-child {
+  justify-content: flex-start;
+  font-weight: 400;
+}
+
+.service-option input[type="checkbox"] {
+  width: 1.15rem;
+  min-height: 1.15rem;
+  accent-color: var(--forest);
+}
+
+.service-quantity {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.service-quantity input {
+  max-width: 6rem;
+}
+
 .form-grid label {
   display: grid;
   min-width: 0;

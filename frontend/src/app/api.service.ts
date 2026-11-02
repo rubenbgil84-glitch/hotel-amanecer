@@ -117,11 +117,36 @@ export interface RoomAvailabilityBlock {
 
 export interface VatRate {
   id: number;
+  vat_category: 'lodging' | 'other';
   effective_from: string;
   rate: number;
 }
 
+export type ServicePricingUnit = 'per_person_night' | 'per_stay' | 'per_night' | 'per_unit';
+
+export interface BookingService {
+  service_id: number;
+  code?: string | null;
+  service_name: string;
+  pricing_unit: ServicePricingUnit;
+  quantity: number;
+  unit_price: number;
+  total: number;
+  vat_category: 'lodging' | 'other';
+}
+
+export interface CatalogService {
+  id: number;
+  code: string | null;
+  price: number;
+  name: string;
+  pricing_unit: ServicePricingUnit;
+  vat_category: 'lodging' | 'other';
+  is_active?: boolean;
+}
+
 export interface BookingVatBreakdown {
+  vat_category?: 'lodging' | 'other';
   effective_from: string;
   rate: number;
   gross: number;
@@ -154,6 +179,7 @@ export interface AdminBooking {
   room_subtotal: number;
   breakfast_total: number;
   pets_total: number;
+  services: BookingService[];
   vat_breakdown: BookingVatBreakdown[] | null;
   discount_code: string | null;
   discount_amount: number;
@@ -258,8 +284,9 @@ export interface BookingInput {
   check_out: string;
   adults: number;
   children: number;
-  breakfast: boolean;
-  pets: boolean;
+  breakfast?: boolean;
+  pets?: boolean;
+  services: Array<{ service_id: number; quantity?: number }>;
   notes: string;
   discount_code?: string;
 }
@@ -310,6 +337,7 @@ export interface BookingResult {
   total: number;
   breakfast_total: number;
   pets_total: number;
+  services: BookingService[];
   vat_breakdown: BookingVatBreakdown[] | null;
   discount_code: string | null;
   discount_amount: number;
@@ -364,8 +392,9 @@ export interface DiscountCodeValidationInput {
   check_out: string;
   adults: number;
   children: number;
-  breakfast: boolean;
-  pets: boolean;
+  breakfast?: boolean;
+  pets?: boolean;
+  services: Array<{ service_id: number; quantity?: number }>;
 }
 
 export interface DiscountCodeValidation {
@@ -400,6 +429,7 @@ export interface ReservationDetails {
   room_subtotal: number;
   breakfast_total: number;
   pets_total: number;
+  services: BookingService[];
   vat_breakdown: BookingVatBreakdown[] | null;
   discount_code: string | null;
   discount_amount: number;
@@ -584,15 +614,31 @@ export class ApiService {
     return this.http.get<VatRate[]>('/api/vat-rates');
   }
 
+  services() {
+    return this.http.get<CatalogService[]>('/api/services');
+  }
+
+  adminServices() {
+    return this.http.get<CatalogService[]>('/api/admin/services');
+  }
+
+  createService(input: Omit<CatalogService, 'id' | 'code'>) {
+    return this.http.post<CatalogService>('/api/admin/services', input);
+  }
+
+  updateService(id: number, input: Omit<CatalogService, 'id' | 'code'>) {
+    return this.http.put<CatalogService>(`/api/admin/services/${id}`, input);
+  }
+
   adminVatRates() {
     return this.http.get<VatRate[]>('/api/admin/vat-rates');
   }
 
-  createVatRate(input: Pick<VatRate, 'effective_from' | 'rate'>) {
+  createVatRate(input: Pick<VatRate, 'vat_category' | 'effective_from' | 'rate'>) {
     return this.http.post<VatRate>('/api/admin/vat-rates', input);
   }
 
-  updateVatRate(id: number, input: Pick<VatRate, 'effective_from' | 'rate'>) {
+  updateVatRate(id: number, input: Pick<VatRate, 'vat_category' | 'effective_from' | 'rate'>) {
     return this.http.put<VatRate>(`/api/admin/vat-rates/${id}`, input);
   }
 

@@ -24,6 +24,7 @@
     @if (loading()) {
       <p role="status">Cargando configuración…</p>
     } @else {
+      <!-- 1. Formulario Principal de Configuración -->
       <form (ngSubmit)="save()">
         @for (group of groups; track group.title) {
           <section class="settings-card" [attr.aria-labelledby]="'group-' + $index">
@@ -71,6 +72,8 @@
             </div>
           </section>
         }
+
+        <!-- 2. Servicios de Conócenos -->
         <section class="settings-card" aria-labelledby="services-list-title">
           <h2 id="services-list-title">Servicios de Conócenos</h2>
           <p>Estos elementos se muestran en la página del hotel. Puedes añadir, editar o eliminar servicios.</p>
@@ -92,6 +95,7 @@
           <button type="button" class="secondary-button" (click)="addService()">Añadir servicio</button>
         </section>
 
+        <!-- 3. Redes Sociales -->
         <section class="settings-card" aria-labelledby="social-title">
           <h2 id="social-title">Redes sociales</h2>
           <p>Activa solo los perfiles que quieras mostrar. Los enlaces deben comenzar por https:// o http://.</p>
@@ -116,6 +120,7 @@
           </div>
           <button type="button" class="secondary-button" (click)="addSocialLink()">Añadir red social</button>
         </section>
+
         <div class="form-actions">
           <button class="primary-button" type="submit" [disabled]="saving() || pendingImageReads() > 0">
             {{ pendingImageReads() > 0 ? 'Procesando imágenes…' : (saving() ? 'Guardando…' : 'Guardar configuración') }}
@@ -124,15 +129,64 @@
       </form>
     }
 
+    <!-- 4. Servicios Reservables -->
+    <section class="settings-card" aria-labelledby="booking-services-title">
+      <h2 id="booking-services-title">Servicios reservables</h2>
+      <p>Configura los suplementos disponibles en el formulario. Los cambios de precio no alteran las reservas ya confirmadas.</p>
+      <div class="editable-list">
+        @for (service of bookingServices(); track service.id || $index) {
+          <article class="editable-item booking-service-item">
+            <label class="field">
+              <span>Nombre</span>
+              <input type="text" [name]="'booking_service_name_' + $index" [(ngModel)]="service.name" maxlength="100" required />
+            </label>
+            <label class="field">
+              <span>Precio (€)</span>
+              <input type="number" [name]="'booking_service_price_' + $index" [(ngModel)]="service.price" min="0" max="100000" step="0.01" required />
+            </label>
+            <label class="field">
+              <span>Forma de cobro</span>
+              <select [name]="'booking_service_unit_' + $index" [(ngModel)]="service.pricing_unit">
+                <option value="per_person_night">Por persona y noche</option>
+                <option value="per_stay">Por estancia</option>
+                <option value="per_night">Por noche</option>
+                <option value="per_unit">Por unidad</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Categoría de IVA</span>
+              <select [name]="'booking_service_vat_' + $index" [(ngModel)]="service.vat_category">
+                <option value="lodging">Alojamiento y servicios vinculados</option>
+                <option value="other">Otros servicios</option>
+              </select>
+            </label>
+            <label class="social-enabled">
+              <input type="checkbox" [name]="'booking_service_active_' + $index" [(ngModel)]="service.is_active" />
+              <span>Disponible para reservar</span>
+            </label>
+            <button type="button" class="secondary-button" [disabled]="savingServices()" (click)="saveBookingService(service)">
+              {{ savingServices() ? 'Guardando…' : (service.id ? 'Guardar servicio' : 'Crear servicio') }}
+            </button>
+          </article>
+        }
+      </div>
+      <button type="button" class="secondary-button" (click)="addBookingService()">Añadir servicio reservable</button>
+    </section>
+
+    <!-- 5. IVA por categoría y fecha de aplicación -->
     <section class="settings-card" aria-labelledby="vat-rates-title">
-      <h2 id="vat-rates-title">IVA por fecha de aplicación</h2>
-      <p>Se aplica el tipo vigente para cada noche de estancia. Los informes conservan el desglose histórico de cada reserva.</p>
+      <h2 id="vat-rates-title">IVA por categoría y fecha de aplicación</h2>
+      <p>El tipo aplicable se selecciona por categoría fiscal y fecha de cada noche. Confirma la clasificación con tu asesoría.</p>
       <div class="vat-rate-list">
         @for (vat of vatRates(); track vat.id) {
-          <div class="vat-rate-row">
+          <div class="vat-rate-row vat-rate-row--grid">
+            <div class="field">
+              <span>Categoría fiscal</span>
+              <strong>{{ vat.vat_category === 'lodging' ? 'Alojamiento y servicios vinculados' : 'Otros servicios' }}</strong>
+            </div>
             <label class="field">
               <span>Vigente desde</span>
-              <input type="date" [name]="'vat_date_' + vat.id" [(ngModel)]="vat.effective_from" [disabled]="$index === 0" />
+              <input type="date" [name]="'vat_date_' + vat.id" [(ngModel)]="vat.effective_from" [disabled]="isFirstVatRate(vat)" />
             </label>
             <label class="field">
               <span>Tipo (%)</span>
@@ -145,7 +199,14 @@
           </div>
         }
       </div>
-      <form class="vat-rate-form" (ngSubmit)="addVatRate()">
+      <form class="vat-rate-form vat-rate-form--grid" (ngSubmit)="addVatRate()">
+        <label class="field">
+          <span>Categoría fiscal</span>
+          <select name="new_vat_category" [(ngModel)]="vatRateDraft.vat_category">
+            <option value="lodging">Alojamiento y servicios vinculados</option>
+            <option value="other">Otros servicios</option>
+          </select>
+        </label>
         <label class="field">
           <span>Nueva fecha de aplicación</span>
           <input type="date" name="new_vat_date" [(ngModel)]="vatRateDraft.effective_from" required />
@@ -154,10 +215,13 @@
           <span>Nuevo tipo (%)</span>
           <input type="number" name="new_vat_rate" [(ngModel)]="vatRateDraft.rate" min="0" max="100" step="0.01" required />
         </label>
-        <button type="submit" class="primary-button" [disabled]="savingVatRate()">Añadir / actualizar fecha</button>
+        <div class="vat-actions">
+          <button type="submit" class="primary-button" [disabled]="savingVatRate()">Añadir / actualizar fecha</button>
+        </div>
       </form>
     </section>
 
+    <!-- 6. Cierres por vacaciones -->
     <section class="settings-card closure-section" aria-labelledby="closure-title">
       <h2 id="closure-title">Cierres por vacaciones</h2>
       <p>Durante estos periodos no se aceptarán reservas con fechas que coincidan con el cierre.</p>
@@ -203,6 +267,7 @@
       }
     </section>
 
+    <!-- 7. Opiniones de huéspedes -->
     <section class="settings-card review-section" aria-labelledby="reviews-title">
       <div class="section-title">
         <div>

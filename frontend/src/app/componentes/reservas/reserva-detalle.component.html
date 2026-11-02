@@ -32,20 +32,15 @@
               }
             </strong>
           </div>
-          <div><span>Desayuno</span><strong>{{ booking()!.breakfast ? 'Incluido' : 'No incluido' }}</strong></div>
-          <div><span>Mascotas</span><strong>{{ booking()!.pets ? 'Sí' : 'No' }}</strong></div>
           <div><span>Alojamiento</span><strong>{{ booking()!.room_subtotal | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
-          @if (booking()!.breakfast_total) {
-            <div><span>Suplemento desayuno</span><strong>{{ booking()!.breakfast_total | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
-          }
-          @if (booking()!.pets_total) {
-            <div><span>Suplemento mascotas</span><strong>{{ booking()!.pets_total | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+          @for (service of booking()!.services ?? []; track service.service_id) {
+            <div><span>{{ service.service_name }} × {{ service.quantity }}</span><strong>{{ service.total | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
           }
           @if (booking()!.discount_amount) {
             <div><span>Descuento{{ booking()!.discount_code ? ' · ' + booking()!.discount_code : '' }}</span><strong>−{{ booking()!.discount_amount | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
           }
-          @for (vat of booking()!.vat_breakdown ?? []; track vat.effective_from + vat.rate) {
-            <div><span>Base imponible · IVA {{ vat.rate }}%</span><strong>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
+          @for (vat of booking()!.vat_breakdown ?? []; track vat.vat_category + vat.effective_from + vat.rate) {
+            <div><span>Base imponible · {{ vat.vat_category === 'other' ? 'Otros servicios' : 'Alojamiento' }} · IVA {{ vat.rate }}%</span><strong>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
             <div><span>IVA incluido · {{ vat.rate }}%</span><strong>{{ vat.vat | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>
           }
           <div><span>Total</span><strong>{{ booking()!.total | currency: 'EUR' : 'symbol' : '1.2-2' : 'es-ES' }}</strong></div>

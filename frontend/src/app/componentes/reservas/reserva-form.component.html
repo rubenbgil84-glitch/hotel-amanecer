@@ -13,17 +13,14 @@
         <div><dt>Salida</dt><dd>{{ stay.checkOut | date: 'longDate' }}</dd></div>
         <div><dt>Viajeros</dt><dd>{{ stay.adults }} adultos · {{ stay.children }} niños</dd></div>
         <div><dt>Duración</dt><dd>{{ booking.nights }} {{ booking.nights === 1 ? 'noche' : 'noches' }}</dd></div>
-        @if (stay.breakfast) {
-          <div><dt>Desayuno</dt><dd>{{ booking.breakfast_total | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
-        }
-        @if (stay.pets) {
-          <div><dt>Mascotas</dt><dd>{{ booking.pets_total | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
+        @for (service of booking.services ?? []; track service.service_id) {
+          <div><dt>{{ service.service_name }}</dt><dd>{{ service.total | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
         }
         @if (booking.discount_amount) {
           <div><dt>Descuento{{ booking.discount_code ? ' · ' + booking.discount_code : '' }}</dt><dd>−{{ booking.discount_amount | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
         }
-        @for (vat of booking.vat_breakdown ?? []; track vat.effective_from + vat.rate) {
-          <div><dt>Base imponible · IVA {{ vat.rate }}%</dt><dd>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
+        @for (vat of booking.vat_breakdown ?? []; track vat.vat_category + vat.effective_from + vat.rate) {
+          <div><dt>Base imponible · {{ vat.vat_category === 'other' ? 'Otros servicios' : 'Alojamiento' }} · IVA {{ vat.rate }}%</dt><dd>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
           <div><dt>IVA incluido · {{ vat.rate }}%</dt><dd>{{ vat.vat | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
         }
         <div class="booking-total"><dt>Total</dt><dd>{{ booking.total | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
@@ -90,19 +87,16 @@
         @if (selectedRoom()?.pricing_type === 'standard' && form.controls.adults.value + form.controls.children.value > 2) {
           <p class="price-note">Incluye {{ form.controls.adults.value + form.controls.children.value - 2 }} cama(s) supletoria(s) a {{ selectedRoom()?.extra_bed_price | currency: 'EUR' : 'symbol' : '1.2-2' }} por noche.</p>
         }
-        @if (breakfastTotal()) {
-          <div><span>Desayuno · {{ form.controls.adults.value + form.controls.children.value }} personas</span><strong>{{ breakfastTotal() | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
-        }
-        @if (petsTotal()) {
-          <div><span>Suplemento mascotas</span><strong>{{ petsTotal() | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+        @for (service of selectedServices(); track service.service_id) {
+          <div><span>{{ service.service_name }} × {{ service.quantity }}</span><strong>{{ service.total | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
         }
         @if (currentDiscount(); as discount) {
           <div class="discount-row"><span>Descuento · {{ discount.code }}</span><strong>−{{ discount.discount_amount | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
         } @else if (appliedDiscount()) {
           <p class="price-note">Han cambiado los datos de la estancia. Vuelve a validar el código.</p>
         }
-        @for (vat of estimatedVatBreakdown(); track vat.rate) {
-          <div><span>Base imponible · IVA {{ vat.rate }}%</span><strong>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
+        @for (vat of estimatedVatBreakdown(); track vat.vat_category + vat.rate) {
+          <div><span>Base imponible · {{ vat.vat_category === 'other' ? 'Otros servicios' : 'Alojamiento' }} · IVA {{ vat.rate }}%</span><strong>{{ vat.taxable_base | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
           <div><span>IVA incluido · {{ vat.rate }}%</span><strong>{{ vat.vat | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
         }
         <div class="price-total"><span>Total estimado</span><strong>{{ estimatedTotal() | currency: 'EUR' : 'symbol' : '1.2-2' }}</strong></div>
@@ -144,20 +138,25 @@
             }
           </select>
         </label>
-        <label>Desayuno
-          <select formControlName="breakfast">
-            <option value="">Elige</option>
-            <option value="yes">Sí</option>
-            <option value="no">No</option>
-          </select>
-        </label>
-        <label>Mascotas
-          <select formControlName="pets">
-            <option value="">Elige</option>
-            <option value="yes">Sí</option>
-            <option value="no">No</option>
-          </select>
-        </label>
+        <fieldset class="field-wide service-options">
+          <legend>Servicios adicionales</legend>
+          @if (catalogServices().length === 0) {
+            <p>No hay servicios adicionales disponibles.</p>
+          }
+          @for (service of catalogServices(); track service.id) {
+            <div class="service-option">
+              <label>
+                <input type="checkbox" [checked]="isServiceSelected(service.id)" (change)="toggleService(service.id, $event)" />
+                <span>{{ service.name }} · {{ service.price | currency: 'EUR' : 'symbol' : '1.2-2' }} {{ service.pricing_unit === 'per_person_night' ? 'por persona y noche' : service.pricing_unit === 'per_stay' ? 'por estancia' : service.pricing_unit === 'per_night' ? 'por noche' : 'por unidad' }}</span>
+              </label>
+              @if (service.pricing_unit === 'per_unit' && isServiceSelected(service.id)) {
+                <label class="service-quantity">Cantidad
+                  <input type="number" min="1" max="100" [value]="serviceQuantity(service.id)" (change)="updateServiceQuantity(service.id, $event)" />
+                </label>
+              }
+            </div>
+          }
+        </fieldset>
         <label>Nombre
           <input type="text" formControlName="first_name" autocomplete="given-name" />
         </label>
@@ -196,8 +195,10 @@
       <button
         type="submit"
         class="btn btn--full"
-        [disabled]="sending() || checkingAvailability()">
-        @if (checkingAvailability()) {
+        [disabled]="sending() || checkingAvailability() || !serviceCatalogLoaded()">
+        @if (!serviceCatalogLoaded()) {
+          Cargando servicios…
+        } @else if (checkingAvailability()) {
           Consultando disponibilidad…
         } @else if (sending()) {
           Reservando…

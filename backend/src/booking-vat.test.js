@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  calculateCategorizedVatBreakdown,
   calculateVatBreakdown,
   normalizeLegacyVatAmounts,
 } from "./booking-vat.js";
@@ -23,6 +24,57 @@ test("extracts included VAT for a stay at one rate", () => {
     vat: 27.27,
     total: 300,
   }]);
+});
+
+test("applies the effective VAT schedule independently by service category", () => {
+  const result = calculateCategorizedVatBreakdown({
+    checkIn: "2027-01-01",
+    checkOut: "2027-01-02",
+    components: [
+      {amount: 110, vat_category: "lodging"},
+      {amount: 121, vat_category: "other"},
+    ],
+    rates: [
+      {vat_category: "lodging", effective_from: "1900-01-01", rate: 10},
+      {vat_category: "other", effective_from: "1900-01-01", rate: 21},
+    ],
+  });
+
+  assert.deepEqual(result.map(({vat_category, taxable_base, vat}) => ({
+    vat_category,
+    taxable_base,
+    vat,
+  })), [
+    {vat_category: "lodging", taxable_base: 100, vat: 10},
+    {vat_category: "other", taxable_base: 100, vat: 21},
+  ]);
+});
+
+test("uses a future rate change only for the category it belongs to", () => {
+  const result = calculateCategorizedVatBreakdown({
+    checkIn: "2027-01-01",
+    checkOut: "2027-01-03",
+    components: [
+      {amount: 220, vat_category: "lodging"},
+      {amount: 242, vat_category: "other"},
+    ],
+    rates: [
+      {vat_category: "lodging", effective_from: "1900-01-01", rate: 10},
+      {vat_category: "other", effective_from: "1900-01-01", rate: 21},
+      {vat_category: "other", effective_from: "2027-01-02", rate: 22},
+    ],
+  });
+
+  assert.deepEqual(result.map(({vat_category, effective_from, rate, total}) => ({
+    vat_category,
+    effective_from,
+    rate,
+    total,
+  })), [
+    {vat_category: "lodging", effective_from: "1900-01-01", rate: 10, total: 220},
+    {vat_category: "other", effective_from: "1900-01-01", rate: 21, total: 121},
+    {vat_category: "other", effective_from: "2027-01-02", rate: 22, total: 121},
+  ]);
 });
 
 test("applies scheduled rates per night and allocates a discount proportionally", () => {

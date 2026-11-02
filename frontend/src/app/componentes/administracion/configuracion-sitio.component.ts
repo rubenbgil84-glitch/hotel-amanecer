@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../api.service';
 import { hotelDateKey } from '../../date-only';
-import type { VatRate } from '../../api.service';
+import type { CatalogService, VatRate } from '../../api.service';
 import { SiteContentService } from '../../site-content.service';
 import {
   SITE_SETTING_DEFAULTS,
@@ -65,13 +65,6 @@ export class ConfiguracionSitio {
         field('reception_closing_time', 'Horario de cierre', 'time'),
         field('brand_tagline', 'Eslogan junto al nombre'),
         field('footer_tagline', 'Eslogan del pie de página', 'textarea'),
-      ],
-    },
-    {
-      title: 'Precios de suplementos',
-      fields: [
-        field('breakfast_price', 'Precio del desayuno por persona y noche (€)', 'number'),
-        field('pets_price', 'Suplemento de mascotas por estancia (€)', 'number'),
       ],
     },
     {
@@ -153,6 +146,7 @@ export class ConfiguracionSitio {
 
   draft: SiteSettings = { ...SITE_SETTING_DEFAULTS };
   services: AboutService[] = [];
+  readonly bookingServices = signal<CatalogService[]>([]);
   socialLinks: SocialLink[] = [];
   imageUploads: Partial<Record<'hero_image_data_url' | 'intro_image_data_url' | 'experience_image_data_url', string>> = {};
   closureDraft: SiteClosureInput = { start_date: '', end_date: '', reason: '' };
@@ -167,8 +161,13 @@ export class ConfiguracionSitio {
   readonly moderatingId = signal<number | null>(null);
   readonly error = signal('');
   readonly notice = signal('');
-  vatRateDraft = { effective_from: '', rate: 10 };
+  vatRateDraft: Pick<VatRate, 'vat_category' | 'effective_from' | 'rate'> = {
+    vat_category: 'lodging',
+    effective_from: '',
+    rate: 10,
+  };
   readonly savingVatRate = signal(false);
+  readonly savingServices = signal(false);
 
   constructor() {
     this.api.adminSiteSettings().subscribe({
@@ -187,6 +186,7 @@ export class ConfiguracionSitio {
     this.loadTestimonials();
     this.loadClosures();
     this.loadVatRates();
+    this.loadBookingServices();
   }
 
   save(): void {
@@ -241,9 +241,63 @@ export class ConfiguracionSitio {
   }
 
   normalizeNumericSetting(key: SiteSettingKey, value: string | number): void {
-    if (['hotel_stars', 'breakfast_price', 'pets_price'].includes(key)) {
+    if (key === 'hotel_stars') {
       this.draft[key] = String(value);
     }
+  }
+
+  loadBookingServices(): void {
+    this.api.adminServices().subscribe({
+      next: (services) => this.bookingServices.set(services),
+      error: (error: HttpErrorResponse) => {
+        console.error('No se pudieron cargar los servicios reservables.', error);
+        this.error.set('No se pudieron cargar los servicios reservables.');
+      },
+    });
+  }
+
+  addBookingService(): void {
+    this.bookingServices.update((services) => [...services, {
+      id: 0,
+      code: null,
+      name: '',
+      price: 0,
+      pricing_unit: 'per_unit',
+      vat_category: 'other',
+      is_active: true,
+    }]);
+  }
+
+  saveBookingService(service: CatalogService): void {
+    if (service.name.trim().length < 2 || !Number.isFinite(Number(service.price))
+      || Number(service.price) < 0 || Number(service.price) > 100000) {
+      this.error.set('Revisa el nombre y el precio del servicio.');
+      return;
+    }
+    this.error.set('');
+    this.notice.set('');
+    this.savingServices.set(true);
+    const input = {
+      name: service.name.trim(),
+      price: Number(service.price),
+      pricing_unit: service.pricing_unit,
+      vat_category: service.vat_category,
+      is_active: Boolean(service.is_active),
+    };
+    const request = service.id
+      ? this.api.updateService(service.id, input)
+      : this.api.createService(input);
+    request.subscribe({
+      next: () => {
+        this.savingServices.set(false);
+        this.notice.set('El servicio se ha guardado.');
+        this.loadBookingServices();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.savingServices.set(false);
+        this.error.set(error.error?.errors?.[0] ?? 'No se pudo guardar el servicio.');
+      },
+    });
   }
 
   onImageSelected(event: Event, fieldKey: SiteSettingKey): void {
@@ -302,10 +356,17 @@ export class ConfiguracionSitio {
     }
     this.savingVatRate.set(true);
     this.error.set('');
-    this.api.createVatRate(this.vatRateDraft).subscribe({
+    this.api.createVatRate({
+      ...this.vatRateDraft,
+      rate: Number(this.vatRateDraft.rate),
+    }).subscribe({
       next: () => {
         this.savingVatRate.set(false);
-        this.vatRateDraft = { effective_from: '', rate: this.vatRateDraft.rate };
+        this.vatRateDraft = {
+          vat_category: this.vatRateDraft.vat_category,
+          effective_from: '',
+          rate: this.vatRateDraft.rate,
+        };
         this.notice.set('El tipo de IVA se ha guardado.');
         this.loadVatRates();
       },
@@ -323,7 +384,11 @@ export class ConfiguracionSitio {
     }
     this.savingVatRate.set(true);
     this.error.set('');
-    this.api.updateVatRate(rate.id, { effective_from: rate.effective_from.slice(0, 10), rate: Number(rate.rate) }).subscribe({
+    this.api.updateVatRate(rate.id, {
+      vat_category: rate.vat_category,
+      effective_from: rate.effective_from.slice(0, 10),
+      rate: Number(rate.rate),
+    }).subscribe({
       next: (updated) => {
         this.vatRates.update((rates) => rates.map((item) => item.id === updated.id ? updated : item));
         this.savingVatRate.set(false);
@@ -351,6 +416,12 @@ export class ConfiguracionSitio {
         this.error.set(error.error?.errors?.[0] ?? 'No se pudo eliminar el tipo de IVA.');
       },
     });
+  }
+
+  isFirstVatRate(rate: VatRate): boolean {
+    return this.vatRates()
+      .filter((item) => item.vat_category === rate.vat_category)
+      .sort((a, b) => a.effective_from.localeCompare(b.effective_from))[0]?.id === rate.id;
   }
 
   imagePreview(fieldKey: SiteSettingKey): string {

@@ -168,11 +168,14 @@
               <dt>Habitación</dt><dd>{{ booking.room_subtotal | currency: 'EUR' }}</dd>
               <dt>Desayuno</dt><dd>{{ booking.breakfast_total | currency: 'EUR' }}</dd>
               <dt>Mascotas</dt><dd>{{ booking.pets_total | currency: 'EUR' }}</dd>
+              @for (service of booking.services ?? []; track service.service_id) {
+                <dt>{{ service.service_name }}</dt><dd>{{ service.total | currency: 'EUR' }}</dd>
+              }
               @if (booking.discount_amount) {
                 <dt>Descuento{{ booking.discount_code ? ' · ' + booking.discount_code : '' }}</dt><dd>−{{ booking.discount_amount | currency: 'EUR' }}</dd>
               }
-              @for (vat of booking.vat_breakdown ?? []; track vat.effective_from + vat.rate) {
-                <dt>Base imponible · IVA {{ vat.rate }}%</dt><dd>{{ vat.taxable_base | currency: 'EUR' }}</dd>
+              @for (vat of booking.vat_breakdown ?? []; track vat.vat_category + vat.effective_from + vat.rate) {
+                <dt>Base imponible · {{ vat.vat_category === 'other' ? 'Otros servicios' : 'Alojamiento' }} · IVA {{ vat.rate }}%</dt><dd>{{ vat.taxable_base | currency: 'EUR' }}</dd>
                 <dt>IVA incluido · {{ vat.rate }}%</dt><dd>{{ vat.vat | currency: 'EUR' }}</dd>
               }
               <dt class="total-label">Total</dt><dd class="total-value">{{ booking.total | currency: 'EUR' }}</dd>

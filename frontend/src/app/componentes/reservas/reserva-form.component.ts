@@ -11,6 +11,8 @@ import {
   AvailabilitySearch,
   BookingInput,
   BookingResult,
+  BookingService,
+  CatalogService,
   DiscountCodeValidation,
   Room,
   VatRate,
@@ -37,14 +39,17 @@ export class ReservaForm {
   readonly checkingAvailability = signal(false);
   readonly errors = signal<string[]>([]);
   readonly result = signal<BookingResult | null>(null);
-  readonly successDetails = signal<{ roomName: string; checkIn: string; checkOut: string; adults: number; children: number; breakfast: boolean; pets: boolean } | null>(null);
+  readonly successDetails = signal<{ roomName: string; checkIn: string; checkOut: string; adults: number; children: number } | null>(null);
   readonly countdown = signal(8);
   readonly checkedRooms = signal<Room[] | null>(this.availability.rooms());
   readonly confirmedSearch = signal<AvailabilitySearch | null>(this.availability.search());
   readonly confirmedRoomId = signal<number | null>(this.availability.roomId());
   readonly unavailableRoomId = signal<number | null>(null);
-  readonly breakfastPrice = signal(5);
-  readonly petsPrice = signal(10);
+  readonly catalogServices = signal<CatalogService[]>([]);
+  readonly serviceCatalogLoaded = signal(false);
+  readonly selectedServiceIds = signal<number[]>([]);
+  readonly serviceQuantities = signal<Record<number, number>>({});
+  readonly invalidServiceQuantityIds = signal<number[]>([]);
   readonly vatRates = signal<VatRate[]>([]);
   readonly adultsOptions = Array.from({ length: 13 }, (_, index) => index + 1);
   readonly childrenOptions = Array.from({ length: 13 }, (_, index) => index);
@@ -71,8 +76,6 @@ export class ReservaForm {
     identity_document: ['', [Validators.required, Validators.minLength(3)]],
     phone: ['', [Validators.required, Validators.minLength(6)]],
     email: ['', [Validators.required, Validators.email]],
-    breakfast: ['', Validators.required],
-    pets: ['', Validators.required],
     notes: [''],
   });
 
@@ -114,10 +117,33 @@ export class ReservaForm {
       : room.double_price + Math.max(0, guests - 2) * room.extra_bed_price;
   });
   readonly roomTotal = computed(() => this.nightlyRoomPrice() * this.nights());
-  readonly breakfastTotal = computed(() => this.currentValues().breakfast === 'yes'
-    ? this.breakfastPrice() * (this.currentValues().adults + this.currentValues().children) * this.nights()
-    : 0);
-  readonly petsTotal = computed(() => this.currentValues().pets === 'yes' ? this.petsPrice() : 0);
+  readonly selectedServices = computed<BookingService[]>(() => {
+    const values = this.currentValues();
+    const travelers = values.adults + values.children;
+    return this.catalogServices()
+      .filter((service) => this.selectedServiceIds().includes(service.id))
+      .map((service) => {
+        const quantity = service.pricing_unit === 'per_person_night'
+          ? travelers * this.nights()
+          : service.pricing_unit === 'per_night'
+            ? this.nights()
+            : service.pricing_unit === 'per_stay'
+              ? 1
+              : this.serviceQuantities()[service.id] ?? 1;
+        return {
+          service_id: service.id,
+          service_name: service.name,
+          pricing_unit: service.pricing_unit,
+          quantity,
+          unit_price: service.price,
+          total: Math.round(service.price * quantity * 100) / 100,
+          vat_category: service.vat_category,
+        };
+      });
+  });
+  readonly servicesTotal = computed(() =>
+    this.selectedServices().reduce((sum, service) => sum + service.total, 0),
+  );
   readonly bookingFingerprint = computed(() => {
     const values = this.currentValues();
     return JSON.stringify({
@@ -125,8 +151,7 @@ export class ReservaForm {
       date_range: values.date_range,
       adults: values.adults,
       children: values.children,
-      breakfast: values.breakfast,
-      pets: values.pets,
+      services: this.selectedServices().map(({ service_id, quantity }) => ({ service_id, quantity })),
     });
   });
   readonly currentDiscount = computed(() => {
@@ -135,7 +160,7 @@ export class ReservaForm {
       applied.code === this.discountCode().trim().toUpperCase() ? applied : null;
   });
   readonly estimatedTotal = computed(() =>
-    Math.max(0, this.roomTotal() + this.breakfastTotal() + this.petsTotal() - (this.currentDiscount()?.discount_amount ?? 0)),
+    Math.max(0, this.roomTotal() + this.servicesTotal() - (this.currentDiscount()?.discount_amount ?? 0)),
   );
   readonly estimatedVatBreakdown = computed(() => {
     const range = this.currentValues().date_range;
@@ -147,8 +172,19 @@ export class ReservaForm {
       const base = Math.floor(cents / nights);
       return Array.from({ length: nights }, (_, index) => base + (index < cents - base * nights ? 1 : 0));
     };
-    const nightly = allocate(this.roomTotal()).map((room, index) =>
-      room + allocate(this.breakfastTotal())[index] + allocate(this.petsTotal())[index],
+    const nightlyByCategory = Array.from({ length: nights }, () => new Map<string, number>());
+    const components = [
+      { amount: this.roomTotal(), category: 'lodging' },
+      ...this.selectedServices().map((service) => ({ amount: service.total, category: service.vat_category })),
+    ];
+    for (const component of components) {
+      allocate(component.amount).forEach((amount, index) => {
+        const nightly = nightlyByCategory[index];
+        nightly.set(component.category, (nightly.get(component.category) ?? 0) + amount);
+      });
+    }
+    const nightly = nightlyByCategory.map((categories) =>
+      [...categories.values()].reduce((sum, amount) => sum + amount, 0),
     );
     const discountCents = Math.round((this.currentDiscount()?.discount_amount ?? 0) * 100);
     const totalGross = nightly.reduce((sum, amount) => sum + amount, 0);
@@ -164,25 +200,40 @@ export class ReservaForm {
     }
     const discountByNight = shares.sort((a, b) => a.index - b.index).map((share) => share.cents);
     const start = Date.parse(`${range.check_in}T00:00:00.000Z`);
-    const grouped = new Map<number, { taxable_base: number; vat: number }>();
+    const grouped = new Map<string, { vat_category: string; rate: number; taxable_base: number; vat: number }>();
     for (let index = 0; index < nights; index += 1) {
       const date = new Date(start + index * 86_400_000).toISOString().slice(0, 10);
-      const rate = rates.reduce<VatRate | null>(
-        (selected, item) => item.effective_from.slice(0, 10) <= date ? item : selected,
-        null,
-      );
-      if (!rate) continue;
-      const amount = nightly[index] - discountByNight[index];
-      const taxableBase = Math.round(amount / (1 + rate.rate / 100));
-      const current = grouped.get(rate.rate) ?? { taxable_base: 0, vat: 0};
-      current.taxable_base += taxableBase;
-      current.vat += amount - taxableBase;
-      grouped.set(rate.rate, current);
+      const categories = [...nightlyByCategory[index]];
+      const categoryShares = categories.map(([, amount], categoryIndex) => {
+        const exact = nightly[index] ? discountByNight[index] * amount / nightly[index] : 0;
+        return { categoryIndex, cents: Math.floor(exact), fraction: exact - Math.floor(exact) };
+      });
+      let remaining = discountByNight[index] - categoryShares.reduce((sum, share) => sum + share.cents, 0);
+      for (const share of [...categoryShares].sort((a, b) => b.fraction - a.fraction || a.categoryIndex - b.categoryIndex)) {
+        if (!remaining) break;
+        share.cents += 1;
+        remaining -= 1;
+      }
+      for (let categoryIndex = 0; categoryIndex < categories.length; categoryIndex += 1) {
+        const [category, gross] = categories[categoryIndex];
+        const rate = rates.reduce<VatRate | null>(
+          (selected, item) => item.vat_category === category && item.effective_from.slice(0, 10) <= date ? item : selected,
+          null,
+        );
+        if (!rate) continue;
+        const amount = gross - (categoryShares.find((share) => share.categoryIndex === categoryIndex)?.cents ?? 0);
+        const taxableBase = Math.round(amount / (1 + rate.rate / 100));
+        const key = `${category}:${rate.rate}`;
+        const current = grouped.get(key) ?? { vat_category: category, rate: rate.rate, taxable_base: 0, vat: 0 };
+        current.taxable_base += taxableBase;
+        current.vat += amount - taxableBase;
+        grouped.set(key, current);
+      }
     }
-    return [...grouped].map(([rate, amounts]) => ({
-      rate,
-      taxable_base: amounts.taxable_base / 100,
-      vat: amounts.vat / 100,
+    return [...grouped.values()].map((item) => ({
+      ...item,
+      taxable_base: item.taxable_base / 100,
+      vat: item.vat / 100,
     }));
   });
   readonly needsAvailabilityCheck = computed(() => {
@@ -205,14 +256,14 @@ export class ReservaForm {
   );
 
   constructor() {
-    this.api.siteSettings().subscribe({
-      next: (settings) => {
-        this.breakfastPrice.set(Number(settings.breakfast_price));
-        this.petsPrice.set(Number(settings.pets_price));
+    this.api.services().subscribe({
+      next: (services) => {
+        this.catalogServices.set(services);
+        this.serviceCatalogLoaded.set(true);
       },
       error: (error: HttpErrorResponse) => {
-        console.error('No se pudieron cargar las tarifas de desayuno y mascotas.', error);
-        this.errors.set(['No se pudieron cargar las tarifas actualizadas. El servidor confirmará el importe final al reservar.']);
+        console.error('No se pudieron cargar los servicios reservables.', error);
+        this.errors.set(['No se pudieron cargar los servicios disponibles.']);
       },
     });
     this.api.vatRates().subscribe({
@@ -237,8 +288,45 @@ export class ReservaForm {
     });
   }
 
+  isServiceSelected(serviceId: number): boolean {
+    return this.selectedServiceIds().includes(serviceId);
+  }
+
+  serviceQuantity(serviceId: number): number {
+    return this.serviceQuantities()[serviceId] ?? 1;
+  }
+
+  toggleService(serviceId: number, event: Event): void {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    this.selectedServiceIds.update((ids) => input.checked
+      ? [...new Set([...ids, serviceId])]
+      : ids.filter((id) => id !== serviceId));
+    if (!input.checked) {
+      this.invalidServiceQuantityIds.update((ids) => ids.filter((id) => id !== serviceId));
+    }
+  }
+
+  updateServiceQuantity(serviceId: number, event: Event): void {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    const quantity = Number(input.value);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+      input.setCustomValidity('Indica una cantidad entre 1 y 100.');
+      this.invalidServiceQuantityIds.update((ids) => [...new Set([...ids, serviceId])]);
+      return;
+    }
+    input.setCustomValidity('');
+    this.invalidServiceQuantityIds.update((ids) => ids.filter((id) => id !== serviceId));
+    this.serviceQuantities.update((quantities) => ({ ...quantities, [serviceId]: quantity }));
+  }
+
   applyDiscountCode(): void {
     this.errors.set([]);
+    if (this.invalidServiceQuantityIds().length) {
+      this.errors.set(['Revisa las cantidades de los servicios seleccionados.']);
+      return;
+    }
     const values = this.form.getRawValue();
     const range = values.date_range;
     const code = this.discountCode().trim();
@@ -254,8 +342,7 @@ export class ReservaForm {
       check_out: range.check_out,
       adults: values.adults,
       children: values.children,
-      breakfast: values.breakfast === 'yes',
-      pets: values.pets === 'yes',
+      services: this.selectedServices().map(({ service_id, quantity }) => ({ service_id, quantity })),
     }).subscribe({
       next: (discount) => {
         this.appliedDiscount.set({ ...discount, fingerprint: this.bookingFingerprint() });
@@ -271,6 +358,10 @@ export class ReservaForm {
   }
 
   async primaryAction() {
+    if (!this.serviceCatalogLoaded()) {
+      this.errors.set(['Espera a que se carguen los servicios disponibles antes de continuar.']);
+      return;
+    }
     if (this.needsAvailabilityCheck()) {
       await this.checkAvailability();
       return;
@@ -320,6 +411,10 @@ export class ReservaForm {
 
   submit() {
     this.errors.set([]);
+    if (this.invalidServiceQuantityIds().length) {
+      this.errors.set(['Revisa las cantidades de los servicios seleccionados.']);
+      return;
+    }
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       this.errors.set(['Completa los campos obligatorios antes de confirmar la reserva.']);
@@ -348,8 +443,7 @@ export class ReservaForm {
       check_out: range.check_out,
       adults: values.adults,
       children: values.children,
-      breakfast: values.breakfast === 'yes',
-      pets: values.pets === 'yes',
+      services: this.selectedServices().map(({ service_id, quantity }) => ({ service_id, quantity })),
       notes: values.notes.trim(),
       ...(this.discountCode().trim() ? { discount_code: this.discountCode().trim() } : {}),
     };
@@ -366,8 +460,6 @@ export class ReservaForm {
           checkOut: range.check_out,
           adults: values.adults,
           children: values.children,
-          breakfast: values.breakfast === 'yes',
-          pets: values.pets === 'yes',
         });
         this.countdownSubscription?.unsubscribe();
         if (result.email_sent) {
@@ -404,10 +496,11 @@ export class ReservaForm {
       identity_document: '',
       phone: '',
       email: '',
-      breakfast: '',
-      pets: '',
       notes: '',
     });
+    this.selectedServiceIds.set([]);
+    this.serviceQuantities.set({});
+    this.invalidServiceQuantityIds.set([]);
     this.discountCode.set('');
     this.appliedDiscount.set(null);
   }

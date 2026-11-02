@@ -24,8 +24,13 @@ import {
   storageBuckets,
   uploadStorageObject,
 } from "./supabase-storage.js";
-import {calculateBookingPrice, calculateDiscount} from "./booking-pricing.js";
 import {
+  calculateBookingPrice,
+  calculateDiscount,
+  calculateServiceLine,
+} from "./booking-pricing.js";
+import {
+  calculateCategorizedVatBreakdown,
   calculateVatBreakdown,
   normalizeLegacyVatAmounts,
 } from "./booking-vat.js";
@@ -256,19 +261,47 @@ app.use(express.json({limit: "24mb"}));
 const hashToken = (token) => createHash("sha256").update(token).digest("hex");
 async function getVatRates(queryable = pool) {
   await queryable.query(
-    `INSERT INTO vat_rates (effective_from, rate)
-     VALUES ('1900-01-01', 10)
-     ON CONFLICT (effective_from) DO NOTHING`,
+    `INSERT INTO vat_rates (vat_category, effective_from, rate)
+     VALUES ('lodging', '1900-01-01', 10), ('other', '1900-01-01', 21)
+     ON CONFLICT (vat_category, effective_from) DO NOTHING`,
   );
   const {rows} = await queryable.query(
-    `SELECT id, effective_from::text AS effective_from, rate::float8 AS rate
+    `SELECT id, vat_category, effective_from::text AS effective_from, rate::float8 AS rate
        FROM vat_rates
-      ORDER BY effective_from`,
+      ORDER BY vat_category, effective_from`,
   );
   return rows;
 }
 
-async function calculateStoredVat(queryable, checkIn, checkOut, pricing, discountAmount) {
+async function calculateStoredVat(queryable, checkIn, checkOut, pricing, discountAmount, serviceLines = []) {
+  const rates = await getVatRates(queryable);
+  if (serviceLines.length) {
+    return calculateCategorizedVatBreakdown({
+      checkIn: toDateOnly(checkIn),
+      checkOut: toDateOnly(checkOut),
+      components: [
+        {amount: pricing.roomSubtotal, vat_category: "lodging"},
+        {
+          amount: serviceLines.some((line) => line.code === "breakfast")
+            ? 0
+            : pricing.breakfastTotal,
+          vat_category: "lodging",
+        },
+        {
+          amount: serviceLines.some((line) => line.code === "pets")
+            ? 0
+            : pricing.petsTotal,
+          vat_category: "lodging",
+        },
+        ...serviceLines.map((line) => ({
+          amount: line.total,
+          vat_category: line.vat_category,
+        })),
+      ],
+      discountAmount,
+      rates,
+    });
+  }
   return calculateVatBreakdown({
     checkIn: toDateOnly(checkIn),
     checkOut: toDateOnly(checkOut),
@@ -276,9 +309,143 @@ async function calculateStoredVat(queryable, checkIn, checkOut, pricing, discoun
     breakfastTotal: pricing.breakfastTotal,
     petsTotal: pricing.petsTotal,
     discountAmount,
-    rates: await getVatRates(queryable),
+    rates: rates.filter((rate) => rate.vat_category === "lodging"),
   });
 }
+
+function priceServices(catalog, selections, travelers, nights) {
+  if (!Array.isArray(selections) || selections.length > 30) {
+    return {error: "La selección de servicios no es válida."};
+  }
+  const selectedIds = selections.map((item) => item?.service_id);
+  if (
+    selectedIds.some((id) => !Number.isInteger(id) || id < 1) ||
+    new Set(selectedIds).size !== selectedIds.length ||
+    catalog.length !== selectedIds.length
+  ) {
+    return {error: "Uno o más servicios seleccionados ya no están disponibles."};
+  }
+  const catalogById = new Map(catalog.map((service) => [service.id, service]));
+  const lines = [];
+  for (const selection of selections) {
+    const service = catalogById.get(selection.service_id);
+    if (!service) return {error: "Uno o más servicios seleccionados ya no están disponibles."};
+    let pricedLine;
+    try {
+      pricedLine = calculateServiceLine(service, {
+        travelers,
+        nights,
+        quantity: selection.quantity,
+      });
+    } catch (error) {
+      if (!(error instanceof RangeError)) throw error;
+      return {error: `No se pudo calcular el servicio ${service.name}: ${error.message}`};
+    }
+    lines.push({
+      service_id: service.id,
+      code: service.code,
+      service_name: service.name,
+      pricing_unit: service.pricing_unit,
+      vat_category: service.vat_category,
+      ...pricedLine,
+    });
+  }
+  return {lines};
+}
+
+function repriceStoredServices(lines, travelers, nights) {
+  return lines.map((line) => {
+    const quantity = line.pricing_unit === "per_person_night"
+      ? travelers * nights
+      : line.pricing_unit === "per_night"
+        ? nights
+        : line.pricing_unit === "per_stay"
+          ? 1
+          : Number(line.quantity);
+    return {
+      ...line,
+      quantity,
+      total: Math.round(Number(line.unit_price) * quantity * 100) / 100,
+    };
+  });
+}
+
+app.get("/api/services", async (_req, res, next) => {
+  try {
+    const {rows} = await pool.query(
+      `SELECT id, code, name, price::float8 AS price, pricing_unit, vat_category
+         FROM service_catalog
+        WHERE is_active
+        ORDER BY id`,
+    );
+    res.set("Cache-Control", "no-store").json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/services", requireAdmin, async (_req, res, next) => {
+  try {
+    const {rows} = await pool.query(
+      `SELECT id, code, name, price::float8 AS price, pricing_unit, vat_category, is_active
+         FROM service_catalog ORDER BY id`,
+    );
+    res.set("Cache-Control", "no-store").json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/services", requireAdmin, async (req, res, next) => {
+  const {name, price, pricing_unit, vat_category = "other", is_active = true} = req.body ?? {};
+  if (
+    typeof name !== "string" || name.trim().length < 2 || name.trim().length > 100 ||
+    typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 100000 ||
+    !["per_person_night", "per_stay", "per_night", "per_unit"].includes(pricing_unit) ||
+    !["lodging", "other"].includes(vat_category) || typeof is_active !== "boolean"
+  ) {
+    return res.status(400).json({errors: ["Revisa el nombre, precio, unidad de cobro y categoría de IVA del servicio."]});
+  }
+  try {
+    const {rows} = await pool.query(
+      `INSERT INTO service_catalog (name, price, pricing_unit, vat_category, is_active)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, code, name, price::float8 AS price, pricing_unit, vat_category, is_active`,
+      [name.trim(), price, pricing_unit, vat_category, is_active],
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/admin/services/:id", requireAdmin, async (req, res, next) => {
+  const id = Number(req.params.id);
+  const {name, price, pricing_unit, vat_category = "other", is_active} = req.body ?? {};
+  if (
+    !Number.isInteger(id) || id < 1 ||
+    typeof name !== "string" || name.trim().length < 2 || name.trim().length > 100 ||
+    typeof price !== "number" || !Number.isFinite(price) || price < 0 || price > 100000 ||
+    !["per_person_night", "per_stay", "per_night", "per_unit"].includes(pricing_unit) ||
+    !["lodging", "other"].includes(vat_category) || typeof is_active !== "boolean"
+  ) {
+    return res.status(400).json({errors: ["Revisa el servicio y sus opciones."]});
+  }
+  try {
+    const {rows} = await pool.query(
+      `UPDATE service_catalog
+          SET name = $2, price = $3, pricing_unit = $4, vat_category = $5, is_active = $6,
+              updated_at = now()
+        WHERE id = $1
+        RETURNING id, code, name, price::float8 AS price, pricing_unit, vat_category, is_active`,
+      [id, name.trim(), price, pricing_unit, vat_category, is_active],
+    );
+    if (!rows.length) return res.status(404).json({errors: ["No se ha encontrado el servicio."]});
+    res.json(rows[0]);
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get("/api/vat-rates", async (_req, res, next) => {
   try {
@@ -298,16 +465,16 @@ app.get("/api/admin/vat-rates", requireAdmin, async (_req, res, next) => {
 });
 
 app.post("/api/admin/vat-rates", requireAdmin, async (req, res, next) => {
-  const {effective_from, rate} = req.body ?? {};
-  if (!isDate(effective_from) || typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 || rate > 100)
+  const {effective_from, rate, vat_category = "lodging"} = req.body ?? {};
+  if (!isDate(effective_from) || typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 || rate > 100 || !["lodging", "other"].includes(vat_category))
     return res.status(400).json({errors: ["Indica una fecha y un porcentaje de IVA válidos (0–100)."]});
   try {
     const {rows} = await pool.query(
-      `INSERT INTO vat_rates (effective_from, rate)
-       VALUES ($1, $2)
-       ON CONFLICT (effective_from) DO UPDATE SET rate = EXCLUDED.rate
-       RETURNING id, effective_from::text AS effective_from, rate::float8 AS rate`,
-      [effective_from, rate],
+      `INSERT INTO vat_rates (vat_category, effective_from, rate)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (vat_category, effective_from) DO UPDATE SET rate = EXCLUDED.rate
+       RETURNING id, vat_category, effective_from::text AS effective_from, rate::float8 AS rate`,
+      [vat_category, effective_from, rate],
     );
     res.json(rows[0]);
   } catch (error) {
@@ -317,12 +484,21 @@ app.post("/api/admin/vat-rates", requireAdmin, async (req, res, next) => {
 
 app.put("/api/admin/vat-rates/:id", requireAdmin, async (req, res, next) => {
   const id = Number(req.params.id);
-  const {effective_from, rate} = req.body ?? {};
-  if (!Number.isInteger(id) || id < 1 || !isDate(effective_from) || typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 || rate > 100)
+  const {effective_from, rate, vat_category = "lodging"} = req.body ?? {};
+  if (!Number.isInteger(id) || id < 1 || !isDate(effective_from) || typeof rate !== "number" || !Number.isFinite(rate) || rate < 0 || rate > 100 || !["lodging", "other"].includes(vat_category))
     return res.status(400).json({errors: ["El tipo, el porcentaje o la fecha del IVA no son válidos."]});
   try {
+    const {rows: currentRates} = await pool.query(
+      "SELECT vat_category FROM vat_rates WHERE id = $1",
+      [id],
+    );
+    if (!currentRates.length)
+      return res.status(404).json({errors: ["No se ha encontrado el tipo de IVA."]});
+    if (currentRates[0].vat_category !== vat_category)
+      return res.status(400).json({errors: ["No se puede cambiar la categoría de un tipo de IVA existente."]});
     const {rows: earliestRates} = await pool.query(
-      "SELECT id, effective_from::text AS effective_from FROM vat_rates ORDER BY effective_from LIMIT 1",
+      "SELECT id, effective_from::text AS effective_from FROM vat_rates WHERE vat_category = $1 ORDER BY effective_from LIMIT 1",
+      [vat_category],
     );
     if (
       earliestRates[0]?.id === id &&
@@ -334,10 +510,10 @@ app.put("/api/admin/vat-rates/:id", requireAdmin, async (req, res, next) => {
     }
     const {rows} = await pool.query(
       `UPDATE vat_rates
-          SET effective_from = $2, rate = $3
+          SET vat_category = $2, effective_from = $3, rate = $4
         WHERE id = $1
-        RETURNING id, effective_from::text AS effective_from, rate::float8 AS rate`,
-      [id, effective_from, rate],
+        RETURNING id, vat_category, effective_from::text AS effective_from, rate::float8 AS rate`,
+      [id, vat_category, effective_from, rate],
     );
     if (!rows.length)
       return res.status(404).json({errors: ["No se ha encontrado el tipo de IVA."]});
@@ -354,11 +530,18 @@ app.delete("/api/admin/vat-rates/:id", requireAdmin, async (req, res, next) => {
   if (!Number.isInteger(id) || id < 1)
     return res.status(400).json({errors: ["El tipo de IVA no es válido."]});
   try {
-    const {rows: earliest} = await pool.query(
-      "SELECT id FROM vat_rates ORDER BY effective_from LIMIT 1",
+    const {rows: deletedRate} = await pool.query(
+      "SELECT id, vat_category FROM vat_rates WHERE id = $1",
+      [id],
     );
+    const {rows: earliest} = deletedRate.length
+      ? await pool.query(
+        "SELECT id FROM vat_rates WHERE vat_category = $1 ORDER BY effective_from LIMIT 1",
+        [deletedRate[0].vat_category],
+      )
+      : {rows: []};
     if (earliest[0]?.id === id)
-      return res.status(409).json({errors: ["No se puede eliminar el primer tipo de IVA, porque es necesario para calcular reservas."]});
+      return res.status(409).json({errors: ["No se puede eliminar el primer tipo de IVA de una categoría, porque es necesario para calcular reservas."]});
     const {rowCount} = await pool.query("DELETE FROM vat_rates WHERE id = $1", [id]);
     if (!rowCount)
       return res.status(404).json({errors: ["No se ha encontrado el tipo de IVA."]});
@@ -749,6 +932,7 @@ async function sendBookingConfirmationEmail({
   pets,
   petsTotal,
   roomSubtotal,
+  services = [],
   discountCode,
   discountAmount,
   total,
@@ -799,13 +983,21 @@ async function sendBookingConfirmationEmail({
     siteName: escapeHtml(site.site_name),
   };
   const guestSummary = `${adults} ${adults === 1 ? "adulto" : "adultos"}${children ? ` · ${children} ${children === 1 ? "niño" : "niños"}` : ""}`;
-  const breakfastSummary = breakfast ? "Incluido" : "No incluido";
-  const petsSummary = pets ? "Sí" : "No";
+  const hasBreakfast = breakfast || services.some((service) => service.code === "breakfast");
+  const hasPets = pets || services.some((service) => service.code === "pets");
+  const breakfastSummary = hasBreakfast ? "Incluido" : "No incluido";
+  const petsSummary = hasPets ? "Sí" : "No";
+  const serviceTextLines = services.map(
+    (service) => `${service.service_name}: ${formatCurrency(Number(service.total))}`,
+  );
+  const serviceHtmlRows = services.map(
+    (service) => `<tr><td style="padding:8px 0;color:#50564e;font-size:14px;">${escapeHtml(service.service_name)}</td><td align="right" style="padding:8px 0;color:#50564e;font-size:14px;">${escapeHtml(formatCurrency(service.total))}</td></tr>`,
+  ).join("");
   const vatTextLines = vatBreakdown.map(
-    (item) => `IVA incluido (${item.rate}%): base ${formatCurrency(item.taxable_base)} · IVA ${formatCurrency(item.vat)}`,
+    (item) => `IVA incluido (${item.vat_category === "other" ? "otros servicios" : "alojamiento"}, ${item.rate}%): base ${formatCurrency(item.taxable_base)} · IVA ${formatCurrency(item.vat)}`,
   );
   const vatHtmlRows = vatBreakdown.map(
-    (item) => `<tr><td style="padding:8px 0;color:#50564e;font-size:13px;">IVA incluido · ${escapeHtml(String(item.rate))}%</td><td align="right" style="padding:8px 0;color:#50564e;font-size:13px;">Base ${escapeHtml(formatCurrency(item.taxable_base))} · IVA ${escapeHtml(formatCurrency(item.vat))}</td></tr>`,
+    (item) => `<tr><td style="padding:8px 0;color:#50564e;font-size:13px;">IVA ${item.vat_category === "other" ? "otros servicios · " : "alojamiento · "}${escapeHtml(String(item.rate))}%</td><td align="right" style="padding:8px 0;color:#50564e;font-size:13px;">Base ${escapeHtml(formatCurrency(item.taxable_base))} · IVA ${escapeHtml(formatCurrency(item.vat))}</td></tr>`,
   ).join("");
   const text = [
     `¡Reserva confirmada, ${guestName}!`,
@@ -832,9 +1024,13 @@ async function sendBookingConfirmationEmail({
     `Consulta los datos de tu reserva: ${detailsLink.href}`,
     "",
     "DESGLOSE DEL PRECIO",
-    `${roomName} · ${nights} ${nights === 1 ? "noche" : "noches"}: ${formatCurrency(total - breakfastTotal - petsTotal)}`,
-    ...(breakfast ? [`Desayuno: ${formatCurrency(breakfastTotal)}`] : []),
-    ...(pets ? [`Suplemento de mascotas: ${formatCurrency(petsTotal)}`] : []),
+    `${roomName} · ${nights} ${nights === 1 ? "noche" : "noches"}: ${formatCurrency(roomSubtotal)}`,
+    ...(services.length
+      ? serviceTextLines
+      : [
+          ...(breakfast ? [`Desayuno: ${formatCurrency(breakfastTotal)}`] : []),
+          ...(pets ? [`Suplemento de mascotas: ${formatCurrency(petsTotal)}`] : []),
+        ]),
     ...(discountAmount
       ? [
           `Descuento${discountCode ? ` · ${discountCode}` : ""}: -${formatCurrency(discountAmount)}`,
@@ -953,8 +1149,7 @@ async function sendBookingConfirmationEmail({
                     <td style="padding:8px 0;color:#50564e;font-size:14px;">Habitación · ${nights} ${nights === 1 ? "noche" : "noches"}</td>
                     <td align="right" style="padding:8px 0;color:#50564e;font-size:14px;">${safe.roomPrice}</td>
                   </tr>
-                  ${breakfast ? `<tr><td style="padding:8px 0;color:#50564e;font-size:14px;">Desayuno</td><td align="right" style="padding:8px 0;color:#50564e;font-size:14px;">${safe.breakfastTotal}</td></tr>` : ""}
-                  ${pets ? `<tr><td style="padding:8px 0;color:#50564e;font-size:14px;">Suplemento de mascotas</td><td align="right" style="padding:8px 0;color:#50564e;font-size:14px;">${safe.petsTotal}</td></tr>` : ""}
+                  ${services.length ? serviceHtmlRows : `${breakfast ? `<tr><td style="padding:8px 0;color:#50564e;font-size:14px;">Desayuno</td><td align="right" style="padding:8px 0;color:#50564e;font-size:14px;">${safe.breakfastTotal}</td></tr>` : ""}${pets ? `<tr><td style="padding:8px 0;color:#50564e;font-size:14px;">Suplemento de mascotas</td><td align="right" style="padding:8px 0;color:#50564e;font-size:14px;">${safe.petsTotal}</td></tr>` : ""}`}
                   ${discountAmount ? `<tr><td style="padding:8px 0;color:#315d39;font-size:14px;">Descuento${safe.discountCode ? ` · ${safe.discountCode}` : ""}</td><td align="right" style="padding:8px 0;color:#315d39;font-size:14px;">−${safe.discountAmount}</td></tr>` : ""}
                   ${vatHtmlRows}
                   <tr>
@@ -2362,6 +2557,14 @@ app.get("/api/reservations/:token", async (req, res, next) => {
               b.pets, b.total::float8 AS total, b.room_subtotal::float8 AS room_subtotal,
               b.breakfast_total::float8 AS breakfast_total, b.pets_total::float8 AS pets_total,
               b.vat_breakdown,
+              COALESCE((SELECT json_agg(json_build_object(
+                'service_id', bsl.service_id, 'service_name', bsl.service_name,
+                'pricing_unit', bsl.pricing_unit, 'quantity', bsl.quantity,
+                'unit_price', bsl.unit_price, 'total', bsl.total,
+                'vat_category', bsl.vat_category, 'code', s.code
+              ) ORDER BY bsl.id) FROM booking_service_lines bsl
+                JOIN service_catalog s ON s.id = bsl.service_id
+               WHERE bsl.booking_id = b.id), '[]'::json) AS services,
               b.discount_code, b.discount_amount::float8 AS discount_amount, b.created_at,
               r.name AS room_name, r.description AS room_description, r.capacity AS room_capacity,
               r.features AS room_features, r.image_url AS room_image_url,
@@ -2564,6 +2767,14 @@ const adminBookingFields = `
   b.notes, b.total::float8 AS total, b.room_subtotal::float8 AS room_subtotal,
   b.breakfast_total::float8 AS breakfast_total, b.pets_total::float8 AS pets_total,
   b.vat_breakdown,
+  COALESCE((SELECT json_agg(json_build_object(
+    'service_id', bsl.service_id, 'service_name', bsl.service_name,
+    'pricing_unit', bsl.pricing_unit, 'quantity', bsl.quantity,
+    'unit_price', bsl.unit_price, 'total', bsl.total,
+    'vat_category', bsl.vat_category, 'code', s.code
+  ) ORDER BY bsl.id) FROM booking_service_lines bsl
+    JOIN service_catalog s ON s.id = bsl.service_id
+   WHERE bsl.booking_id = b.id), '[]'::json) AS services,
   b.discount_code, b.discount_amount::float8 AS discount_amount,
   b.discount_percent::float8 AS discount_percent,
   b.arrival_pin, b.reservation_code, b.created_at,
@@ -2702,6 +2913,7 @@ async function sendBookingEmailForAdmin(booking, {token, accessToken}) {
     pets: booking.pets,
     petsTotal: Number(booking.pets_total),
     roomSubtotal: Number(booking.room_subtotal),
+    services: booking.services ?? [],
     discountCode: booking.discount_code ?? null,
     discountAmount: Number(booking.discount_amount ?? 0),
     vatBreakdown: booking.vat_breakdown ?? [],
@@ -3046,6 +3258,12 @@ async function createBookingPdf(booking, {includePrecheckin = true} = {}) {
       ["Habitación", formatCurrency(Number(booking.room_subtotal))],
       ["Desayuno", formatCurrency(Number(booking.breakfast_total))],
       ["Mascotas", formatCurrency(Number(booking.pets_total))],
+      ...(Array.isArray(booking.services)
+        ? booking.services.map((service) => [
+            service.service_name,
+            formatCurrency(Number(service.total)),
+          ])
+        : []),
       ...(Number(booking.discount_amount) > 0
         ? [
             [
@@ -3056,8 +3274,8 @@ async function createBookingPdf(booking, {includePrecheckin = true} = {}) {
         : []),
       ...(Array.isArray(booking.vat_breakdown)
         ? booking.vat_breakdown.flatMap((item) => [
-            [`IVA incluido · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
-            [`IVA incluido · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
+            [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
+            [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
           ])
         : []),
       ["TOTAL", formatCurrency(Number(booking.total))],
@@ -3177,13 +3395,19 @@ async function createPrecheckinPdf(booking) {
         ["Alojamiento", formatCurrency(Number(booking.room_subtotal))],
         ["Desayuno", formatCurrency(Number(booking.breakfast_total))],
         ["Mascotas", formatCurrency(Number(booking.pets_total))],
+        ...(Array.isArray(booking.services)
+          ? booking.services.map((service) => [
+              service.service_name,
+              formatCurrency(Number(service.total)),
+            ])
+          : []),
         ...(Number(booking.discount_amount) > 0
           ? [[`Descuento${booking.discount_code ? ` · ${booking.discount_code}` : ""}`, `−${formatCurrency(Number(booking.discount_amount))}`]]
           : []),
         ...(Array.isArray(booking.vat_breakdown)
           ? booking.vat_breakdown.flatMap((item) => [
-              [`IVA incluido · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
-              [`IVA incluido · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
+              [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
+              [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
             ])
           : []),
         ["Total", formatCurrency(Number(booking.total))],
@@ -3391,13 +3615,19 @@ async function sendPrecheckinCompletedEmail(booking, pdfAttachment) {
         ["Alojamiento", formatCurrency(Number(booking.room_subtotal))],
         ["Desayuno", formatCurrency(Number(booking.breakfast_total))],
         ["Mascotas", formatCurrency(Number(booking.pets_total))],
+        ...(Array.isArray(booking.services)
+          ? booking.services.map((service) => [
+              service.service_name,
+              formatCurrency(Number(service.total)),
+            ])
+          : []),
         ...(Number(booking.discount_amount) > 0
           ? [[`Descuento${booking.discount_code ? ` · ${booking.discount_code}` : ""}`, `−${formatCurrency(Number(booking.discount_amount))}`]]
           : []),
         ...(Array.isArray(booking.vat_breakdown)
           ? booking.vat_breakdown.flatMap((item) => [
-              [`IVA incluido · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
-              [`IVA incluido · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
+              [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · base`, formatCurrency(Number(item.taxable_base))],
+              [`IVA ${item.vat_category === "other" ? "otros servicios" : "alojamiento"} · ${item.rate}% · cuota`, formatCurrency(Number(item.vat))],
             ])
           : []),
         ["Total", formatCurrency(Number(booking.total))],
@@ -4457,8 +4687,7 @@ app.put("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
         .status(409)
         .json({errors: ["La habitación no está disponible en esas fechas."]});
     }
-    const siteSettings = await readSiteSettings();
-    const pricing = calculateBookingPrice({
+    const basePricing = calculateBookingPrice({
       pricingType: room.pricing_type,
       singlePrice: room.single_price,
       doublePrice: room.double_price,
@@ -4469,11 +4698,62 @@ app.put("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
       checkOut: check_out,
       adults,
       children,
-      breakfast,
-      pets,
-      breakfastPrice: Number(siteSettings.breakfast_price),
-      petsPrice: Number(siteSettings.pets_price),
+      breakfast: false,
+      pets: false,
     });
+    const {rows: storedServices} = await client.query(
+      `SELECT bsl.id, bsl.service_id, bsl.service_name, s.code, bsl.pricing_unit,
+              bsl.vat_category, bsl.quantity::float8 AS quantity,
+              bsl.unit_price::float8 AS unit_price
+         FROM booking_service_lines bsl
+         JOIN service_catalog s ON s.id = bsl.service_id
+        WHERE bsl.booking_id = $1
+        ORDER BY bsl.id`,
+      [bookingId],
+    );
+    let serviceLines = repriceStoredServices(
+      storedServices,
+      adults + children,
+      basePricing.nights,
+    );
+    for (const [code, selected] of [["breakfast", breakfast], ["pets", pets]]) {
+      const currentIndex = serviceLines.findIndex((line) => line.code === code);
+      if (!selected) {
+        if (currentIndex >= 0) serviceLines.splice(currentIndex, 1);
+        continue;
+      }
+      if (currentIndex >= 0) continue;
+      const {rows: serviceRows} = await client.query(
+        `SELECT id, code, name, price::float8 AS price, pricing_unit, vat_category
+           FROM service_catalog WHERE code = $1 AND is_active`,
+        [code],
+      );
+      if (!serviceRows.length) {
+        await client.query("ROLLBACK");
+        return res.status(409).json({
+          errors: [`El servicio ${code === "breakfast" ? "desayuno" : "mascotas"} ya no está disponible.`],
+        });
+      }
+      const priced = priceServices(
+        serviceRows,
+        [{service_id: serviceRows[0].id}],
+        adults + children,
+        basePricing.nights,
+      );
+      if (priced.error) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({errors: [priced.error]});
+      }
+      serviceLines.push(priced.lines[0]);
+    }
+    const breakfastTotal = serviceLines.find((line) => line.code === "breakfast")?.total ?? 0;
+    const petsTotal = serviceLines.find((line) => line.code === "pets")?.total ?? 0;
+    const pricing = {
+      ...basePricing,
+      breakfastTotal,
+      petsTotal,
+      total: basePricing.roomSubtotal + serviceLines.reduce((sum, line) => sum + line.total, 0),
+    };
     const discountPercent = Number(current.discount_percent ?? 0);
     const discountAmount = discountPercent
       ? calculateDiscount(pricing.total, discountPercent)
@@ -4485,6 +4765,7 @@ app.put("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
       check_out,
       pricing,
       discountAmount,
+      serviceLines,
     );
     const accessToken = randomBytes(32).toString("base64url");
     const precheckinToken = randomBytes(32).toString("base64url");
@@ -4519,8 +4800,8 @@ app.put("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
         check_out,
         adults,
         children,
-        breakfast,
-        pets,
+        serviceLines.some((line) => line.code === "breakfast"),
+        serviceLines.some((line) => line.code === "pets"),
         notes.trim(),
         total,
         pricing.roomSubtotal,
@@ -4531,6 +4812,36 @@ app.put("/api/admin/bookings/:id", requireAdmin, async (req, res, next) => {
         hashToken(accessToken),
       ],
     );
+    const retainedServiceIds = serviceLines.map((line) => line.service_id);
+    await client.query(
+      `DELETE FROM booking_service_lines
+        WHERE booking_id = $1 AND NOT (service_id = ANY($2::int[]))`,
+      [bookingId, retainedServiceIds],
+    );
+    for (const line of serviceLines) {
+      if (line.id) {
+        await client.query(
+          `UPDATE booking_service_lines SET quantity = $2, total = $3 WHERE id = $1`,
+          [line.id, line.quantity, line.total],
+        );
+      } else {
+        await client.query(
+          `INSERT INTO booking_service_lines
+             (booking_id, service_id, service_name, pricing_unit, vat_category, quantity, unit_price, total)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [
+            bookingId,
+            line.service_id,
+            line.service_name,
+            line.pricing_unit,
+            line.vat_category,
+            line.quantity,
+            line.unit_price,
+            line.total,
+          ],
+        );
+      }
+    }
     await client.query(
       `INSERT INTO pre_checkings (booking_id, room_id, token_hash, token_expires_at)
        VALUES ($1, $2, $3, $4)
@@ -5244,6 +5555,7 @@ app.post("/api/discount-codes/validate", async (req, res, next) => {
     children,
     breakfast,
     pets,
+    services,
   } = req.body ?? {};
   if (
     typeof code !== "string" ||
@@ -5259,8 +5571,9 @@ app.post("/api/discount-codes/validate", async (req, res, next) => {
     children < 0 ||
     children > 12 ||
     adults + children > 13 ||
-    typeof breakfast !== "boolean" ||
-    typeof pets !== "boolean"
+    (services === undefined &&
+      (typeof breakfast !== "boolean" || typeof pets !== "boolean")) ||
+    (services !== undefined && !Array.isArray(services))
   ) {
     return res.status(400).json({
       errors: ["Completa los datos de la estancia para validar el código."],
@@ -5280,8 +5593,7 @@ app.post("/api/discount-codes/validate", async (req, res, next) => {
         .status(400)
         .json({errors: ["La habitación no admite la ocupación indicada."]});
     }
-    const settings = await readSiteSettings();
-    const pricing = calculateBookingPrice({
+    const basePricing = calculateBookingPrice({
       pricingType: room.pricing_type,
       singlePrice: room.single_price,
       doublePrice: room.double_price,
@@ -5292,11 +5604,29 @@ app.post("/api/discount-codes/validate", async (req, res, next) => {
       checkOut: check_out,
       adults,
       children,
-      breakfast,
-      pets,
-      breakfastPrice: Number(settings.breakfast_price),
-      petsPrice: Number(settings.pets_price),
+      breakfast: false,
+      pets: false,
     });
+    const {rows: serviceCatalog} = await pool.query(
+      `SELECT id, code, name, price::float8 AS price, pricing_unit, vat_category
+         FROM service_catalog WHERE is_active ORDER BY id`,
+    );
+    const selections = services ?? serviceCatalog
+      .filter((service) => (service.code === "breakfast" && breakfast) || (service.code === "pets" && pets))
+      .map((service) => ({service_id: service.id}));
+    const pricedServices = priceServices(
+      serviceCatalog,
+      selections,
+      adults + children,
+      basePricing.nights,
+    );
+    if (pricedServices.error) {
+      return res.status(400).json({errors: [pricedServices.error]});
+    }
+    const pricing = {
+      ...basePricing,
+      total: basePricing.roomSubtotal + pricedServices.lines.reduce((sum, line) => sum + line.total, 0),
+    };
     const validation = await validateDiscountForStay(pool, {
       code,
       amount: pricing.total,
@@ -5865,6 +6195,7 @@ app.post("/api/bookings", async (req, res, next) => {
     children = 0,
     breakfast = false,
     pets = false,
+    services,
     notes = "",
     discount_code = "",
   } = req.body ?? {};
@@ -5896,6 +6227,8 @@ app.post("/api/bookings", async (req, res, next) => {
   if (typeof breakfast !== "boolean") errors.push("Indica si deseas desayuno.");
   if (typeof pets !== "boolean")
     errors.push("Indica si viajarás con mascotas.");
+  if (services !== undefined && !Array.isArray(services))
+    errors.push("La selección de servicios no es válida.");
   if (typeof notes !== "string" || notes.length > 2000)
     errors.push("Las observaciones no pueden superar los 2000 caracteres.");
   if (
@@ -5959,8 +6292,7 @@ app.post("/api/bookings", async (req, res, next) => {
         .status(409)
         .json({errors: ["Esa habitación no está disponible en esas fechas."]});
     }
-    const siteSettings = await readSiteSettings();
-    const pricing = calculateBookingPrice({
+    const basePricing = calculateBookingPrice({
       pricingType: room.pricing_type,
       singlePrice: room.single_price,
       doublePrice: room.double_price,
@@ -5971,13 +6303,36 @@ app.post("/api/bookings", async (req, res, next) => {
       checkOut: check_out,
       adults,
       children,
-      breakfast,
-      pets,
-      breakfastPrice: Number(siteSettings.breakfast_price),
-      petsPrice: Number(siteSettings.pets_price),
+      breakfast: false,
+      pets: false,
     });
-    const nights = pricing.nights;
-    const {roomSubtotal, breakfastTotal, petsTotal} = pricing;
+    const nights = basePricing.nights;
+    const {rows: serviceCatalog} = await client.query(
+      `SELECT id, code, name, price::float8 AS price, pricing_unit, vat_category
+         FROM service_catalog WHERE is_active ORDER BY id`,
+    );
+    const selections = services ?? serviceCatalog
+      .filter((service) => (service.code === "breakfast" && breakfast) || (service.code === "pets" && pets))
+      .map((service) => ({service_id: service.id}));
+    const pricedServices = priceServices(
+      serviceCatalog,
+      selections,
+      adults + children,
+      nights,
+    );
+    if (pricedServices.error) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({errors: [pricedServices.error]});
+    }
+    const serviceLines = pricedServices.lines;
+    const breakfastTotal = serviceLines.find((line) => line.code === "breakfast")?.total ?? 0;
+    const petsTotal = serviceLines.find((line) => line.code === "pets")?.total ?? 0;
+    const pricing = {
+      ...basePricing,
+      breakfastTotal,
+      petsTotal,
+      total: basePricing.roomSubtotal + serviceLines.reduce((sum, line) => sum + line.total, 0),
+    };
     let activeDiscount = null;
     let discountAmount = 0;
     if (discount_code.trim()) {
@@ -6008,6 +6363,7 @@ app.post("/api/bookings", async (req, res, next) => {
       check_out,
       pricing,
       discountAmount,
+      serviceLines,
     );
     const reference = newReservationCode();
     const arrivalPin = String(randomInt(0, 1_000_000)).padStart(6, "0");
@@ -6034,11 +6390,11 @@ app.post("/api/bookings", async (req, res, next) => {
         check_out,
         adults,
         children,
-        breakfast,
-        pets,
+        serviceLines.some((line) => line.code === "breakfast"),
+        serviceLines.some((line) => line.code === "pets"),
         notes.trim(),
         total,
-        roomSubtotal,
+        pricing.roomSubtotal,
         breakfastTotal,
         petsTotal,
         JSON.stringify(vatBreakdown),
@@ -6050,6 +6406,23 @@ app.post("/api/bookings", async (req, res, next) => {
         hashToken(accessToken),
       ],
     );
+    for (const line of serviceLines) {
+      await client.query(
+        `INSERT INTO booking_service_lines
+           (booking_id, service_id, service_name, pricing_unit, vat_category, quantity, unit_price, total)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [
+          insertedBookings[0].id,
+          line.service_id,
+          line.service_name,
+          line.pricing_unit,
+          line.vat_category,
+          line.quantity,
+          line.unit_price,
+          line.total,
+        ],
+      );
+    }
     if (activeDiscount) {
       await client.query(
         "INSERT INTO booking_discount_redemptions (booking_id, discount_code_id) VALUES ($1, $2)",
@@ -6086,11 +6459,12 @@ app.post("/api/bookings", async (req, res, next) => {
         adults,
         children,
         nights,
-        breakfast,
+        breakfast: serviceLines.some((line) => line.code === "breakfast"),
         breakfastTotal,
-        pets,
+        pets: serviceLines.some((line) => line.code === "pets"),
         petsTotal,
-        roomSubtotal,
+        roomSubtotal: pricing.roomSubtotal,
+        services: serviceLines,
         discountCode: activeDiscount?.code ?? null,
         discountAmount,
         vatBreakdown,
@@ -6117,6 +6491,15 @@ app.post("/api/bookings", async (req, res, next) => {
       discount_amount: discountAmount,
       breakfast_total: breakfastTotal,
       pets_total: petsTotal,
+      services: serviceLines.map(({service_id, service_name, pricing_unit, quantity, unit_price, total, vat_category}) => ({
+        service_id,
+        service_name,
+        pricing_unit,
+        quantity,
+        unit_price,
+        total,
+        vat_category,
+      })),
       vat_breakdown: vatBreakdown,
     });
   } catch (err) {
@@ -6724,9 +7107,39 @@ async function start() {
         rate NUMERIC(5,2) NOT NULL CHECK (rate >= 0 AND rate <= 100),
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
-      INSERT INTO vat_rates (effective_from, rate)
-      VALUES ('1900-01-01', 10)
-      ON CONFLICT (effective_from) DO NOTHING;
+      ALTER TABLE vat_rates ADD COLUMN IF NOT EXISTS vat_category TEXT NOT NULL DEFAULT 'lodging';
+      ALTER TABLE vat_rates DROP CONSTRAINT IF EXISTS vat_rates_effective_from_key;
+      CREATE UNIQUE INDEX IF NOT EXISTS vat_rates_category_effective_from_idx
+        ON vat_rates (vat_category, effective_from);
+      INSERT INTO vat_rates (vat_category, effective_from, rate)
+      VALUES ('lodging', '1900-01-01', 10), ('other', '1900-01-01', 21)
+      ON CONFLICT (vat_category, effective_from) DO NOTHING;
+      CREATE TABLE IF NOT EXISTS service_catalog (
+        id SERIAL PRIMARY KEY,
+        code TEXT UNIQUE,
+        name TEXT NOT NULL CHECK (char_length(name) BETWEEN 2 AND 100),
+        price NUMERIC(10,2) NOT NULL CHECK (price >= 0),
+        pricing_unit TEXT NOT NULL CHECK (pricing_unit IN ('per_person_night', 'per_stay', 'per_night', 'per_unit')),
+        vat_category TEXT NOT NULL DEFAULT 'other' CHECK (vat_category IN ('lodging', 'other')),
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS booking_service_lines (
+        id BIGSERIAL PRIMARY KEY,
+        booking_id INT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+        service_id INT NOT NULL REFERENCES service_catalog(id),
+        service_name TEXT NOT NULL,
+        pricing_unit TEXT NOT NULL CHECK (pricing_unit IN ('per_person_night', 'per_stay', 'per_night', 'per_unit')),
+        vat_category TEXT NOT NULL CHECK (vat_category IN ('lodging', 'other')),
+        quantity NUMERIC(10,2) NOT NULL CHECK (quantity >= 0),
+        unit_price NUMERIC(10,2) NOT NULL CHECK (unit_price >= 0),
+        total NUMERIC(10,2) NOT NULL CHECK (total >= 0),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        UNIQUE (booking_id, service_id)
+      );
+      CREATE INDEX IF NOT EXISTS booking_service_lines_booking_idx
+        ON booking_service_lines (booking_id);
       ALTER TABLE bookings ADD COLUMN IF NOT EXISTS arrival_pin TEXT;
       UPDATE bookings
          SET breakfast_total = CASE WHEN breakfast
@@ -6974,6 +7387,35 @@ async function start() {
         [key, value],
       );
     }
+    await pool.query(`
+      INSERT INTO service_catalog (code, name, price, pricing_unit, vat_category)
+      SELECT 'breakfast', 'Desayuno', setting_value::numeric, 'per_person_night', 'lodging'
+        FROM site_settings WHERE setting_key = 'breakfast_price'
+      ON CONFLICT (code) DO NOTHING;
+      INSERT INTO service_catalog (code, name, price, pricing_unit, vat_category)
+      SELECT 'pets', 'Suplemento mascotas', setting_value::numeric, 'per_stay', 'other'
+        FROM site_settings WHERE setting_key = 'pets_price'
+      ON CONFLICT (code) DO NOTHING;
+    `);
+    await pool.query(`
+      INSERT INTO booking_service_lines
+        (booking_id, service_id, service_name, pricing_unit, vat_category, quantity, unit_price, total)
+      SELECT b.id, s.id, s.name, s.pricing_unit, s.vat_category,
+             GREATEST(1, (b.adults + b.children) * (b.check_out - b.check_in)),
+             b.breakfast_total / GREATEST(1, (b.adults + b.children) * (b.check_out - b.check_in)),
+             b.breakfast_total
+        FROM bookings b
+        JOIN service_catalog s ON s.code = 'breakfast'
+       WHERE b.breakfast AND b.breakfast_total > 0
+      ON CONFLICT (booking_id, service_id) DO NOTHING;
+      INSERT INTO booking_service_lines
+        (booking_id, service_id, service_name, pricing_unit, vat_category, quantity, unit_price, total)
+      SELECT b.id, s.id, s.name, s.pricing_unit, s.vat_category, 1, b.pets_total, b.pets_total
+        FROM bookings b
+        JOIN service_catalog s ON s.code = 'pets'
+       WHERE b.pets AND b.pets_total > 0
+      ON CONFLICT (booking_id, service_id) DO NOTHING;
+    `);
     await pool.query(
       `DELETE FROM site_settings
       WHERE setting_key IN ('intro_image_url', 'experience_image_url')`,

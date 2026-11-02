@@ -71,13 +71,44 @@ CREATE INDEX contact_messages_status_created_at_idx ON contact_messages (status,
 
 CREATE TABLE vat_rates (
   id SERIAL PRIMARY KEY,
+  vat_category TEXT NOT NULL DEFAULT 'lodging' CHECK (vat_category IN ('lodging', 'other')),
   effective_from DATE NOT NULL UNIQUE,
   rate NUMERIC(5,2) NOT NULL CHECK (rate >= 0 AND rate <= 100),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-INSERT INTO vat_rates (effective_from, rate)
-VALUES ('1900-01-01', 10)
-ON CONFLICT (effective_from) DO NOTHING;
+ALTER TABLE vat_rates DROP CONSTRAINT IF EXISTS vat_rates_effective_from_key;
+CREATE UNIQUE INDEX IF NOT EXISTS vat_rates_category_effective_from_idx
+  ON vat_rates (vat_category, effective_from);
+INSERT INTO vat_rates (vat_category, effective_from, rate)
+VALUES ('lodging', '1900-01-01', 10), ('other', '1900-01-01', 21)
+ON CONFLICT (vat_category, effective_from) DO NOTHING;
+
+CREATE TABLE service_catalog (
+  id SERIAL PRIMARY KEY,
+  code TEXT UNIQUE,
+  name TEXT NOT NULL CHECK (char_length(name) BETWEEN 2 AND 100),
+  price NUMERIC(10,2) NOT NULL CHECK (price >= 0),
+  pricing_unit TEXT NOT NULL CHECK (pricing_unit IN ('per_person_night', 'per_stay', 'per_night', 'per_unit')),
+  vat_category TEXT NOT NULL DEFAULT 'other' CHECK (vat_category IN ('lodging', 'other')),
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE booking_service_lines (
+  id BIGSERIAL PRIMARY KEY,
+  booking_id INT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  service_id INT NOT NULL REFERENCES service_catalog(id),
+  service_name TEXT NOT NULL,
+  pricing_unit TEXT NOT NULL CHECK (pricing_unit IN ('per_person_night', 'per_stay', 'per_night', 'per_unit')),
+  vat_category TEXT NOT NULL CHECK (vat_category IN ('lodging', 'other')),
+  quantity NUMERIC(10,2) NOT NULL CHECK (quantity >= 0),
+  unit_price NUMERIC(10,2) NOT NULL CHECK (unit_price >= 0),
+  total NUMERIC(10,2) NOT NULL CHECK (total >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (booking_id, service_id)
+);
+CREATE INDEX booking_service_lines_booking_idx ON booking_service_lines (booking_id);
 
 CREATE TABLE discount_codes (
   id SERIAL PRIMARY KEY,
