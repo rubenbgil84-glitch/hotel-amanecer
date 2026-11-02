@@ -749,9 +749,9 @@ async function sendContactReplyEmail({name, email, subject, message}) {
   const safeSubject = escapeHtml(subject);
   const safeMessage = escapeHtml(message).replace(/\r?\n/g, "<br />");
   await mailer.sendMail({
-    from: EMAIL_USER,
+    from: EMAIL_FROM,
     to: email,
-    replyTo: site.site_email || EMAIL_USER,
+    replyTo: site.site_email || HOTEL_CONTACT_EMAIL,
     subject: `Respuesta a tu consulta · ${subject}`,
     text: [
       `Hola ${name},`,
@@ -6107,6 +6107,8 @@ app.post("/api/bookings", async (req, res, next) => {
        VALUES ($1, $2, $3, $4)`,
       [insertedBookings[0].id, room_id, hashToken(token), tokenExpiresAt],
     );
+    let emailSent = true;
+    await client.query("COMMIT");
     try {
       const {rows: bookingRows} = await client.query(
         `SELECT ${adminBookingFields}
@@ -6145,21 +6147,16 @@ app.post("/api/bookings", async (req, res, next) => {
         reservationPdf,
       });
     } catch (error) {
-      await client.query("ROLLBACK");
+      emailSent = false;
       console.error(
-        "No se pudo enviar el enlace de pre-check-in; la reserva no se guardó.",
+        `La reserva ${reference} se guardó, pero no se pudo enviar el enlace de pre-check-in.`,
         error,
       );
-      return res.status(502).json({
-        errors: [
-          "No se pudo enviar el correo con el pre-check-in. La reserva no se ha completado; inténtalo de nuevo más tarde.",
-        ],
-      });
     }
-    await client.query("COMMIT");
     res.status(201).json({
       reference,
       pin: arrivalPin,
+      email_sent: emailSent,
       nights,
       total,
       discount_code: activeDiscount?.code ?? null,
@@ -6509,17 +6506,8 @@ app.post("/api/pre-check-in/:token", async (req, res, next) => {
   }
 });
 
-// En producción Render sirve el frontend ya compilado desde este mismo proceso.
-// Así las llamadas a /api y la cookie de administración permanecen en el mismo
-// origen, sin necesitar un proxy ni CORS entre servicios.
-const frontendBuildRoot = fileURLToPath(
-  new URL("../../frontend/dist/frontend/browser/", import.meta.url),
-);
-app.use(express.static(frontendBuildRoot, {index: false, maxAge: "1y"}));
-app.get(/^(?!\/api(?:\/|$)).*/, (_req, res, next) => {
-  res.sendFile(join(frontendBuildRoot, "index.html"), (error) => {
-    if (error) next(error);
-  });
+app.use((_req, res) => {
+  res.status(404).json({errors: ["Ruta no encontrada."]});
 });
 
 app.use((err, _req, res, _next) => {

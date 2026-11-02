@@ -305,6 +305,7 @@ export interface AvailabilitySearch {
 export interface BookingResult {
   pin: string;
   reference: string;
+  email_sent: boolean;
   nights: number;
   total: number;
   breakfast_total: number;

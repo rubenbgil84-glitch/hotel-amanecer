@@ -29,17 +29,21 @@
         <div class="booking-total"><dt>Total</dt><dd>{{ booking.total | currency: 'EUR' : 'symbol' : '1.2-2' }}</dd></div>
       </dl>
     }
-    <p class="email-notice">Te hemos enviado por correo el enlace personal para completar el pre-check-in, disponible durante los tres días anteriores a la llegada.</p>
-    <div
-      class="countdown-track"
-      role="progressbar"
-      aria-label="Tiempo que se mostrará la confirmación"
-      aria-valuemin="0"
-      aria-valuemax="8"
-      [attr.aria-valuenow]="countdown()">
-      <span [style.width.%]="countdown() / 8 * 100"></span>
-    </div>
-    <p class="countdown-label">Este resumen se cerrará en {{ countdown() }} segundos.</p>
+    @if (booking.email_sent) {
+      <p class="email-notice">Te hemos enviado por correo el enlace personal para completar el pre-check-in, disponible durante los tres días anteriores a la llegada.</p>
+      <div
+        class="countdown-track"
+        role="progressbar"
+        aria-label="Tiempo que se mostrará la confirmación"
+        aria-valuemin="0"
+        aria-valuemax="8"
+        [attr.aria-valuenow]="countdown()">
+        <span [style.width.%]="countdown() / 8 * 100"></span>
+      </div>
+      <p class="countdown-label">Este resumen se cerrará en {{ countdown() }} segundos.</p>
+    } @else {
+      <p class="email-warning" role="alert">La reserva está guardada, pero no se pudo enviar el correo de confirmación y el enlace de pre-check-in. Guarda la referencia y el PIN, y contacta con el hotel para que te reenvíen el enlace. No vuelvas a hacer la reserva.</p>
+    }
     <button type="button" class="btn" (click)="reset()">Hacer otra reserva</button>
   </div>
 } @else {

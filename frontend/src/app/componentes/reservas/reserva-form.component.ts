@@ -359,6 +359,7 @@ export class ReservaForm {
       next: (result) => {
         this.sending.set(false);
         this.result.set(result);
+        this.countdown.set(result.email_sent ? 8 : 0);
         this.successDetails.set({
           roomName: room.name,
           checkIn: range.check_in,
@@ -368,16 +369,17 @@ export class ReservaForm {
           breakfast: values.breakfast === 'yes',
           pets: values.pets === 'yes',
         });
-        this.countdown.set(8);
         this.countdownSubscription?.unsubscribe();
-        this.countdownSubscription = timer(1000, 1000).pipe(
-          take(8),
-          map((_, index) => 7 - index),
-          takeUntilDestroyed(this.destroyRef),
-        ).subscribe((remaining) => {
-          this.countdown.set(remaining);
-          if (remaining === 0) void this.router.navigateByUrl('/');
-        });
+        if (result.email_sent) {
+          this.countdownSubscription = timer(1000, 1000).pipe(
+            take(8),
+            map((_, index) => 7 - index),
+            takeUntilDestroyed(this.destroyRef),
+          ).subscribe((remaining) => {
+            this.countdown.set(remaining);
+            if (remaining === 0) void this.router.navigateByUrl('/');
+          });
+        }
       },
       error: (error: HttpErrorResponse) => {
         this.sending.set(false);
